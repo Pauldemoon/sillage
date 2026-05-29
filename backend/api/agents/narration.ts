@@ -63,7 +63,14 @@ export async function generateNarration(
   const response = await getClient().messages.create({
     model: "claude-sonnet-4-5",
     max_tokens: 400,
-    system: SYSTEM_PROMPT,
+    // Prompt caching : system identique aux 4 narrations d'une émission.
+    system: [
+      {
+        type: "text",
+        text: SYSTEM_PROMPT,
+        cache_control: { type: "ephemeral" },
+      },
+    ],
     messages: [
       {
         role: "user",

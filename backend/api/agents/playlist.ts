@@ -32,7 +32,11 @@ export async function buildPlaylist(
   const response = await getClient().messages.create({
     model: "claude-sonnet-4-5",
     max_tokens: 800,
-    system: `Tu es un programmateur radio musical expert. Tu sélectionnes 5 morceaux pour une émission.
+    // Prompt caching : la charte (longue) est partagée entre émissions proches.
+    system: [
+      {
+        type: "text",
+        text: `Tu es un programmateur radio musical expert. Tu sélectionnes 5 morceaux pour une émission.
 
 ${SILLAGE_EDITORIAL_CHARTER}
 
@@ -48,6 +52,9 @@ Règles :
 
 Réponds UNIQUEMENT en JSON valide :
 [{"title": "...", "artist": "..."}, ...]`,
+        cache_control: { type: "ephemeral" },
+      },
+    ],
     messages: [
       {
         role: "user",

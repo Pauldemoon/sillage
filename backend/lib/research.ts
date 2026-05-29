@@ -50,9 +50,10 @@ export async function researchArtist(
   const { label: genreLabel, domains } = pickDomains(genreSignals);
 
   // --- Phase 2 : Tavily ciblé sur la presse du genre ---
-  const tavily = await fetchTavily(title, artist, domains);
-
-  const all: SourcedFact[] = [
+  // Tavily est la SEULE source payante ici. On ne l'appelle que si les
+  // sources gratuites sont maigres : sinon elle n'ajoute qu'à la marge et
+  // consomme un crédit. Seuil : moins de 3 sources OU moins de 1200 caractères.
+  const freeSources = [
     wikiArtist,
     wikiTrack,
     musicbrainz,
@@ -60,8 +61,13 @@ export async function researchArtist(
     lastfm,
     genius,
     discogs,
-    ...tavily,
   ].filter((s): s is SourcedFact => s !== null);
+  const freeChars = freeSources.reduce((sum, s) => sum + s.content.length, 0);
+  const needsTavily = freeSources.length < 3 || freeChars < 1200;
+
+  const tavily = needsTavily ? await fetchTavily(title, artist, domains) : [];
+
+  const all: SourcedFact[] = [...freeSources, ...tavily];
 
   const factBlocks = all.map((s) => `[${s.source}]\n${s.content}`);
 
@@ -69,7 +75,11 @@ export async function researchArtist(
     factBlocks.push(`[Contexte]\nArtiste : ${artist}. Morceau : ${title}.`);
   }
 
-  console.log(`Genre détecté : ${genreLabel} → ${domains.join(", ")}`);
+  console.log(
+    `Genre détecté : ${genreLabel} → ${domains.join(", ")} | Tavily : ${
+      needsTavily ? "oui" : "non (sources gratuites suffisantes)"
+    }`,
+  );
 
   return {
     facts: factBlocks.join("\n\n---\n\n"),

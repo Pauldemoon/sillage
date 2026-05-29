@@ -47,15 +47,11 @@ function parseJson<T>(text: string): T {
   return JSON.parse(clean.slice(start, end + 1));
 }
 
-function normalizeReview(
-  review: Partial<EditorialReview>,
-): EditorialReview {
+function normalizeReview(review: Partial<EditorialReview>): EditorialReview {
   return {
     summary: review.summary || "",
     assignments: Array.isArray(review.assignments) ? review.assignments : [],
-    replacements: Array.isArray(review.replacements)
-      ? review.replacements
-      : [],
+    replacements: Array.isArray(review.replacements) ? review.replacements : [],
   };
 }
 
@@ -84,7 +80,8 @@ function fallbackReview(dossiers: TrackDossier[]): EditorialReview {
 
 async function repairEditorialJson(text: string): Promise<EditorialReview> {
   const response = await getClient().messages.create({
-    model: "claude-sonnet-4-5",
+    // Réparation purement mécanique : Haiku largement suffisant.
+    model: "claude-haiku-4-5",
     max_tokens: 900,
     system: `Tu répares du JSON invalide.
 Renvoie UNIQUEMENT un JSON valide conforme à ce schéma :
@@ -183,7 +180,15 @@ export async function reviewPlaylist(
   const response = await getClient().messages.create({
     model: "claude-sonnet-4-5",
     max_tokens: 900,
-    system: SYSTEM_PROMPT,
+    // Prompt caching : la charte éditoriale (longue) est identique à chaque
+    // passe de relecture (jusqu'à 3 par émission) → −90% sur ces tokens.
+    system: [
+      {
+        type: "text",
+        text: SYSTEM_PROMPT,
+        cache_control: { type: "ephemeral" },
+      },
+    ],
     messages: [
       {
         role: "user",

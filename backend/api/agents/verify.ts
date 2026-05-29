@@ -37,9 +37,20 @@ export async function verifyNarration(
   facts: string,
 ): Promise<string> {
   const response = await getClient().messages.create({
-    model: "claude-sonnet-4-5",
+    // Haiku suffit ici : c'est de la vérification ANCRÉE (comparer la
+    // narration à des faits FOURNIS), pas de la création. Le style reste
+    // sur Sonnet côté narration. Gros gain de coût sur 4 appels riches en entrée.
+    model: "claude-haiku-4-5",
     max_tokens: 400,
-    system: SYSTEM_PROMPT,
+    // Prompt caching : le system prompt est identique aux 4 appels d'une
+    // même émission → −90% sur les tokens d'entrée mis en cache.
+    system: [
+      {
+        type: "text",
+        text: SYSTEM_PROMPT,
+        cache_control: { type: "ephemeral" },
+      },
+    ],
     messages: [
       {
         role: "user",
