@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "functions": {
+    "api/generate.ts": {
+      "maxDuration": 300
+    },
+    "api/seed.ts": {
+      "maxDuration": 30
+    },
+    "api/debug.ts": {
+      "maxDuration": 60
+    }
+  }
+}
