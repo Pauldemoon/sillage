@@ -28,7 +28,17 @@ export async function buildPlaylist(
   description: string,
   facts: string,
   memory: UserMemoryProfile,
+  knownCandidates: { title: string; artist: string }[] = [],
 ): Promise<SpotifyTrack[]> {
+  // Layer 2 — pool de candidats validés (dérivé des voyages déjà en cache
+  // pour cette graine). Ce sont des morceaux déjà résolus sur Spotify et
+  // déjà retenus éditorialement : on les propose comme inspiration fiable,
+  // sans contraindre, pour gagner en qualité/disponibilité sans figer la
+  // diversité (l'angle reste le pilote).
+  const poolBlock = knownCandidates.length
+    ? `\n\nMorceaux déjà validés pour ce morceau de départ (présents sur Spotify, retenus dans de précédentes émissions). Tu peux en réutiliser s'ils SERVENT VRAIMENT l'angle ci-dessus, mais tu restes libre — et encouragé — à proposer de meilleurs choix neufs :
+${knownCandidates.map((c) => `- ${c.title} — ${c.artist}`).join("\n")}`
+    : "";
   const response = await getClient().messages.create({
     model: "claude-sonnet-4-5",
     max_tokens: 800,
@@ -66,7 +76,7 @@ Mémoire utilisateur :
 ${formatMemoryForPrompt(memory) || "Aucune mémoire disponible."}
 
 Faits sourcés :
-${facts.slice(0, 1000)}
+${facts.slice(0, 1000)}${poolBlock}
 
 Donne-moi 8 morceaux candidats. Le premier doit être le morceau de départ.`,
       },

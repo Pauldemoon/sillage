@@ -155,6 +155,40 @@ function heardArchetypesFor(
   ];
 }
 
+// Layer 2 — pool de candidats validés, dérivé des voyages déjà en cache pour
+// cette graine. On agrège les morceaux de découverte (hors graine) de tous
+// les voyages, classés par fréquence d'apparition (les plus éprouvés d'abord).
+// Aucun stockage ni appel DB supplémentaire : on réutilise journeyCandidates.
+function buildCandidatePool(
+  candidates: CachedJourney<JourneyCore>[],
+  limit = 12,
+): { title: string; artist: string }[] {
+  const counts = new Map<
+    string,
+    { title: string; artist: string; count: number }
+  >();
+
+  for (const journey of candidates) {
+    // On saute la position 1 (la graine) : elle est toujours imposée.
+    for (const track of journey.payload.tracks.slice(1)) {
+      const key = `${normalize(track.title)}|${normalize(track.artist)}`;
+      const existing = counts.get(key);
+      if (existing) existing.count += 1;
+      else
+        counts.set(key, {
+          title: track.title,
+          artist: track.artist,
+          count: 1,
+        });
+    }
+  }
+
+  return [...counts.values()]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit)
+    .map(({ title, artist }) => ({ title, artist }));
+}
+
 async function buildDossiers(
   tracks: SpotifyTrack[],
   seedResearch: Awaited<ReturnType<typeof researchArtist>>,
@@ -353,7 +387,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       heardArchetypesFor(journeyCandidates, heardJourneys),
     );
 
-    // Agent 2 — playlist
+    // Agent 2 — playlist (nourrie du pool de candidats validés, Layer 2)
+    const candidatePool = buildCandidatePool(journeyCandidates);
     const tracks = await buildPlaylist(
       title,
       artist,
@@ -361,6 +396,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       description,
       seedResearch.facts,
       memoryProfile,
+      candidatePool,
     );
 
     if (tracks.length === 0) {
