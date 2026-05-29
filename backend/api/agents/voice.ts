@@ -1,8 +1,13 @@
 import axios from "axios";
+import { getCachedTts, setCachedTts } from "../../lib/cache/matter";
 
 export async function generateVoice(text: string): Promise<Buffer> {
   const voiceId = process.env.ELEVENLABS_VOICE_ID!;
   const apiKey = process.env.ELEVENLABS_API_KEY!;
+
+  // Couche 1 : un texte déjà synthétisé (même voix) = 0 appel TTS.
+  const cached = await getCachedTts(voiceId, text);
+  if (cached) return cached;
 
   const response = await axios.post(
     `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
@@ -26,5 +31,7 @@ export async function generateVoice(text: string): Promise<Buffer> {
     },
   );
 
-  return Buffer.from(response.data);
+  const audio = Buffer.from(response.data);
+  await setCachedTts(voiceId, text, audio);
+  return audio;
 }

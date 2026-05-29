@@ -1,4 +1,5 @@
 import axios from "axios";
+import { getCachedTrack, setCachedTrack } from "./cache/matter";
 
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID!;
 const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET!;
@@ -104,11 +105,21 @@ export async function findBestTrackMatch(
   title: string,
   artist: string,
 ): Promise<SpotifyTrack | null> {
+  // Couche 1 : résolution Spotify mise en cache (stable, mutualisée).
+  const hit = await getCachedTrack<SpotifyTrack>(title, artist);
+  if (hit) return hit;
+
   const exact = await searchTrack(title, artist);
-  if (exact && isLikelyMatch(exact, title, artist)) return exact;
+  if (exact && isLikelyMatch(exact, title, artist)) {
+    await setCachedTrack(title, artist, exact);
+    return exact;
+  }
 
   const results = await searchTracks(`${title} ${artist}`);
-  return results.find((track) => isLikelyMatch(track, title, artist)) || null;
+  const match =
+    results.find((track) => isLikelyMatch(track, title, artist)) || null;
+  if (match) await setCachedTrack(title, artist, match);
+  return match;
 }
 
 export async function searchTracks(query: string): Promise<SpotifyTrack[]> {

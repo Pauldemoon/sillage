@@ -6,11 +6,17 @@ import { fetchGenius } from "./sources/genius";
 import { fetchDiscogs } from "./sources/discogs";
 import { fetchTavily } from "./sources/tavily";
 import { pickDomains } from "./sources/genres";
+import { getCachedResearch, setCachedResearch } from "./cache/matter";
 
 export interface SourcedFact {
   content: string;
   source: string;
   url: string;
+}
+
+export interface ResearchResult {
+  facts: string;
+  sources: SourcedFact[];
 }
 
 /**
@@ -22,7 +28,14 @@ export interface SourcedFact {
 export async function researchArtist(
   title: string,
   artist: string,
-): Promise<{ facts: string; sources: SourcedFact[] }> {
+): Promise<ResearchResult> {
+  // --- Couche 1 : cache de matière (déterministe, mutualisé entre users) ---
+  const hit = await getCachedResearch<ResearchResult>(title, artist);
+  if (hit) {
+    console.log(`Recherche (cache) : ${title} — ${artist}`);
+    return hit;
+  }
+
   // --- Phase 1 : tout sauf Tavily ---
   const [wikiArtist, wikiTrack, musicbrainz, audiodb, lastfm, genius, discogs] =
     await Promise.all([
@@ -81,8 +94,16 @@ export async function researchArtist(
     }`,
   );
 
-  return {
+  const result: ResearchResult = {
     facts: factBlocks.join("\n\n---\n\n"),
     sources: all,
   };
+
+  // On ne met en cache que de la vraie matière (au moins une source réelle),
+  // jamais le placeholder de contexte vide.
+  if (all.length > 0) {
+    await setCachedResearch(title, artist, result);
+  }
+
+  return result;
 }
