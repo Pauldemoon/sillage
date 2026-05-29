@@ -10,7 +10,11 @@ import {
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { Emission, EmissionTrack, generateEmission } from "../services/api";
-import { loadMemory, mergeMemoryPatch } from "../services/memory";
+import {
+  loadMemory,
+  mergeMemoryPatch,
+  rememberJourney,
+} from "../services/memory";
 import { setupAudio, playNarration, stopAudio } from "../services/audio";
 import {
   connectSpotify,
@@ -73,6 +77,7 @@ export default function PlayerScreen() {
 
       if (initialEmission) {
         mergeMemoryPatch(initialEmission.memoryPatch).catch(() => {});
+        rememberJourney(initialEmission.journeyId).catch(() => {});
         await connectSpotify();
         await playPreparedEmission(initialEmission, false);
         return;
@@ -106,6 +111,7 @@ export default function PlayerScreen() {
 
       // On enregistre ce que l'utilisateur vient d'entendre pour la suite.
       mergeMemoryPatch(generatedEmission.memoryPatch).catch(() => {});
+      rememberJourney(generatedEmission.journeyId).catch(() => {});
 
       setEmission(generatedEmission);
       await playPreparedEmission(generatedEmission, true);

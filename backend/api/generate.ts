@@ -17,6 +17,11 @@ import {
   buildMemoryProfile,
   type UserMemoryProfile,
 } from "../lib/memory/profile";
+import {
+  getJourneyCandidates,
+  saveJourney,
+  type CachedJourney,
+} from "../lib/cache/journeys";
 
 function publicSources(sources: SourcedFact[]) {
   const seen = new Set<string>();
@@ -50,6 +55,104 @@ function sameTrack(a: SpotifyTrack, b: SpotifyTrack) {
   return (
     normalize(a.title) === normalize(b.title) && sameArtist(a.artist, b.artist)
   );
+}
+
+// --- Layer 3 : voyage mis en cache (sans audio) ---------------------------
+// Tout ce qui rend un voyage rejouable, hors audio (resynthétisé depuis les
+// textes → tape tts_cache) et hors profil/patch mémoire (recalculés par
+// utilisateur). Les pistes gardent title/artist : suffisant pour la mémoire.
+interface JourneyCore {
+  angle: string;
+  description: string;
+  archetype: string;
+  broadcastPlan: ReturnType<typeof planBroadcast>;
+  editorialSummary: string;
+  tracks: {
+    id: string;
+    title: string;
+    artist: string;
+    cover: string;
+    spotifyUri: string;
+    duration: number;
+    editorialRole?: string;
+    editorialReason?: string;
+    sources: { label: string; url: string }[];
+  }[];
+  narrations: string[];
+}
+
+// Synthèse vocale séquentielle (plan ElevenLabs Starter = 2 requêtes max).
+// Chaque texte déjà synthétisé tape tts_cache → 0 appel API, quasi-instantané.
+async function synthNarrations(narrationTexts: string[]): Promise<string[]> {
+  const audioBuffers = Array<Buffer | null>(narrationTexts.length).fill(null);
+  for (let i = 0; i < narrationTexts.length; i++) {
+    const text = narrationTexts[i];
+    if (!text) continue;
+
+    let buf: Buffer | null = null;
+    for (let attempt = 0; attempt < 3 && !buf; attempt++) {
+      try {
+        buf = await generateVoice(text);
+      } catch (e: any) {
+        if (e?.response?.status === 429 && attempt < 2) {
+          await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+        } else {
+          throw e;
+        }
+      }
+    }
+    audioBuffers[i] = buf;
+  }
+
+  return audioBuffers.map((buf) =>
+    buf ? `data:audio/mpeg;base64,${buf.toString("base64")}` : "",
+  );
+}
+
+// Choisit un voyage déjà en cache pour cette graine, en respectant la
+// politique de diversité : jamais un voyage déjà entendu, jamais un artiste
+// rejeté, et on privilégie un archétype d'angle que l'auditeur n'a pas connu.
+function pickReusableJourney(
+  candidates: CachedJourney<JourneyCore>[],
+  memory: UserMemoryProfile,
+  heardJourneys: string[],
+): CachedJourney<JourneyCore> | null {
+  const heard = new Set(heardJourneys);
+  const isDisliked = (artist: string) =>
+    memory.dislikedArtists.some((disliked) => sameArtist(disliked, artist));
+
+  const fresh = candidates.filter(
+    (journey) =>
+      !heard.has(journey.journeyId) && !journey.artists.some(isDisliked),
+  );
+  if (fresh.length === 0) return null;
+
+  const heardArchetypes = new Set(
+    candidates
+      .filter((journey) => heard.has(journey.journeyId))
+      .map((journey) => journey.archetype),
+  );
+
+  // Priorité à un archétype neuf ; sinon, le plus ancien voyage non entendu.
+  return (
+    fresh.find((journey) => !heardArchetypes.has(journey.archetype)) || fresh[0]
+  );
+}
+
+// Archétypes déjà servis à cet auditeur pour cette graine : on les évite
+// lors d'une génération neuve pour garantir un voyage différent.
+function heardArchetypesFor(
+  candidates: CachedJourney<JourneyCore>[],
+  heardJourneys: string[],
+): string[] {
+  const heard = new Set(heardJourneys);
+  return [
+    ...new Set(
+      candidates
+        .filter((journey) => heard.has(journey.journeyId))
+        .map((journey) => journey.archetype),
+    ),
+  ];
 }
 
 async function buildDossiers(
@@ -199,15 +302,55 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const memoryProfile = buildMemoryProfile(memory);
+    const heardJourneys: string[] = Array.isArray(memory?.heardJourneys)
+      ? memory.heardJourneys
+      : [];
+
+    // --- Layer 3 : tenter de resservir un voyage déjà préparé -------------
+    // Si un voyage existe pour cette graine, qu'il n'a pas été entendu et ne
+    // contient aucun artiste rejeté, on le rejoue. L'audio est resynthétisé
+    // depuis les textes (tape tts_cache) : quasi-instantané, 0 appel TTS,
+    // 0 appel Claude. Sinon on génère un voyage neuf et on le mémorise.
+    const journeyCandidates = await getJourneyCandidates<JourneyCore>(
+      title,
+      artist,
+    );
+    const reusable = pickReusableJourney(
+      journeyCandidates,
+      memoryProfile,
+      heardJourneys,
+    );
+    if (reusable) {
+      const core = reusable.payload;
+      const audioUrls = await synthNarrations(core.narrations);
+      console.log(
+        `Voyage réutilisé (${reusable.journeyId}, archétype ${core.archetype})`,
+      );
+      return res.json({
+        angle: core.angle,
+        description: core.description,
+        broadcastPlan: core.broadcastPlan,
+        editorialSummary: core.editorialSummary,
+        memoryProfile,
+        memoryPatch: buildMemoryPatch(core.tracks, artist),
+        journeyId: reusable.journeyId,
+        cached: true,
+        tracks: core.tracks,
+        narrations: core.narrations,
+        audioUrls,
+      });
+    }
 
     // Recherche initiale : elle sert à trouver l'angle global de l'émission.
     const seedResearch = await researchArtist(title, artist);
 
-    // Agent 1 — angle éditorial basé sur des faits réels
-    const { angle, description } = await generateAngle(
+    // Agent 1 — angle éditorial basé sur des faits réels.
+    // On évite les archétypes déjà servis à cet auditeur pour cette graine.
+    const { angle, description, archetype } = await generateAngle(
       title,
       artist,
       seedResearch.facts,
+      heardArchetypesFor(journeyCandidates, heardJourneys),
     );
 
     // Agent 2 — playlist
@@ -271,30 +414,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       spokenNarrations.push(verified);
     }
 
-    // Voix générées SÉQUENTIELLEMENT : le plan ElevenLabs Starter
-    // n'autorise que 2 requêtes simultanées (sinon 429).
-    const audioBuffers = Array<Buffer | null>(narrationTexts.length).fill(null);
-    for (let i = 0; i < narrationTexts.length; i++) {
-      const text = narrationTexts[i];
-      if (!text) continue;
+    const audioUrls = await synthNarrations(narrationTexts);
 
-      let buf: Buffer | null = null;
-      for (let attempt = 0; attempt < 3 && !buf; attempt++) {
-        try {
-          buf = await generateVoice(text);
-        } catch (e: any) {
-          if (e?.response?.status === 429 && attempt < 2) {
-            await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
-          } else {
-            throw e;
-          }
-        }
-      }
-      audioBuffers[i] = buf;
-    }
+    const publicTracks = dossiers.map((dossier) => ({
+      id: dossier.track.id,
+      title: dossier.track.title,
+      artist: dossier.track.artist,
+      cover: dossier.track.cover,
+      spotifyUri: dossier.track.spotifyUri,
+      duration: dossier.track.duration,
+      editorialRole: dossier.editorialRole,
+      editorialReason: dossier.editorialReason,
+      sources: publicSources(dossier.sources),
+    }));
 
-    const audioUrls = audioBuffers.map((buf) =>
-      buf ? `data:audio/mpeg;base64,${buf.toString("base64")}` : "",
+    // --- Layer 3 : mémoriser ce voyage neuf pour de futures écoutes -------
+    // On stocke tout le rejouable SAUF l'audio (resynthétisé depuis les
+    // textes). Le journeyId permet à l'app de l'ajouter à heardJourneys.
+    const journeyCore: JourneyCore = {
+      angle,
+      description,
+      archetype,
+      broadcastPlan,
+      editorialSummary: editorialSummaries.join(" "),
+      tracks: publicTracks,
+      narrations: narrationTexts,
+    };
+    const journeyId = await saveJourney(
+      title,
+      artist,
+      archetype,
+      curatedTracks.map((track) => track.artist),
+      journeyCore,
     );
 
     return res.json({
@@ -304,17 +455,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       editorialSummary: editorialSummaries.join(" "),
       memoryProfile,
       memoryPatch: buildMemoryPatch(curatedTracks, artist),
-      tracks: dossiers.map((dossier) => ({
-        id: dossier.track.id,
-        title: dossier.track.title,
-        artist: dossier.track.artist,
-        cover: dossier.track.cover,
-        spotifyUri: dossier.track.spotifyUri,
-        duration: dossier.track.duration,
-        editorialRole: dossier.editorialRole,
-        editorialReason: dossier.editorialReason,
-        sources: publicSources(dossier.sources),
-      })),
+      journeyId,
+      cached: false,
+      tracks: publicTracks,
       narrations: narrationTexts,
       audioUrls,
     });

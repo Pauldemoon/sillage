@@ -3,25 +3,49 @@ import Anthropic from "@anthropic-ai/sdk";
 const getClient = () =>
   new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+// Palette d'archétypes d'angle. La clé sert de tag stable pour le cache de
+// voyages (diversité) ; le label est ce que lit le directeur éditorial.
+export const ARCHETYPES: Record<string, string> = {
+  filiation: "La filiation cachée — qui a influencé qui, la dette d'un artiste envers un autre",
+  geographie: "Le contre-pied géographique — une ville, une scène, contre une autre",
+  objet: "L'objet ou le détail — une anecdote concrète qui ouvre tout un monde",
+  rivalite: "La rivalité — deux camps, deux écoles qui s'opposent",
+  bascule: "Le moment-bascule — l'instant précis où quelque chose change dans la musique",
+  heritage: "L'héritage — ce que ce morceau a engendré, ses enfants",
+  envers: "L'envers du décor — le revers, le secret, le malentendu derrière le succès",
+  fil: "Le fil thématique — un thème, un son, un geste commun à plusieurs morceaux",
+};
+
+export interface AngleResult {
+  angle: string;
+  description: string;
+  archetype: string;
+}
+
 export async function generateAngle(
   title: string,
   artist: string,
   facts: string,
-): Promise<{ angle: string; description: string }> {
+  avoidArchetypes: string[] = [],
+): Promise<AngleResult> {
+  const palette = Object.entries(ARCHETYPES)
+    .map(([key, label]) => `- ${key} : ${label}`)
+    .join("\n");
+
+  const avoidNote =
+    avoidArchetypes.length > 0
+      ? `\n\nIMPORTANT — diversité : l'auditeur a déjà eu des émissions sur ce morceau avec ces archétypes : ${avoidArchetypes.join(
+          ", ",
+        )}. Choisis OBLIGATOIREMENT un archétype DIFFÉRENT pour lui offrir un nouveau voyage.`
+      : "";
+
   const response = await getClient().messages.create({
     model: "claude-sonnet-4-5",
     max_tokens: 400,
     system: `Tu es directeur éditorial d'une radio musicale, dans l'esprit de FIP ou Nova. À partir d'un morceau de départ et de faits réels sourcés, tu trouves l'angle d'une émission qui fera découvrir 5 morceaux cohérents.
 
-Tu choisis D'ABORD un archétype d'angle dans cette palette, puis tu l'incarnes avec les faits réels du morceau :
-- La filiation cachée — qui a influencé qui, la dette d'un artiste envers un autre
-- Le contre-pied géographique — une ville, une scène, contre une autre
-- L'objet ou le détail — une anecdote concrète qui ouvre tout un monde
-- La rivalité — deux camps, deux écoles qui s'opposent
-- Le moment-bascule — l'instant précis où quelque chose change dans la musique
-- L'héritage — ce que ce morceau a engendré, ses enfants
-- L'envers du décor — le revers, le secret, le malentendu derrière le succès
-- Le fil thématique — un thème, un son, un geste commun à plusieurs morceaux
+Tu choisis D'ABORD un archétype d'angle dans cette palette (utilise sa CLÉ), puis tu l'incarnes avec les faits réels du morceau :
+${palette}
 
 L'angle doit :
 - S'appuyer sur les faits fournis, jamais sur l'invention
@@ -31,14 +55,14 @@ L'angle doit :
 - Être en français
 
 Réponds UNIQUEMENT en JSON valide, sans markdown :
-{"angle": "le titre de l'émission", "description": "une phrase qui explique l'angle et le fil rouge entre les morceaux"}`,
+{"archetype": "la clé de l'archétype choisi", "angle": "le titre de l'émission", "description": "une phrase qui explique l'angle et le fil rouge entre les morceaux"}`,
     messages: [
       {
         role: "user",
         content: `Titre de départ : "${title}" de ${artist}
 
 Faits sourcés disponibles :
-${facts}`,
+${facts}${avoidNote}`,
       },
     ],
   });
@@ -49,5 +73,16 @@ ${facts}`,
     .replace(/```json\n?/g, "")
     .replace(/```\n?/g, "")
     .trim();
-  return JSON.parse(clean);
+  const parsed = JSON.parse(clean) as Partial<AngleResult>;
+
+  // Garde-fou : si le modèle renvoie un archétype hors palette, on retombe
+  // sur une clé neutre pour ne pas casser le tag de cache.
+  const archetype =
+    parsed.archetype && ARCHETYPES[parsed.archetype] ? parsed.archetype : "fil";
+
+  return {
+    angle: parsed.angle || "",
+    description: parsed.description || "",
+    archetype,
+  };
 }

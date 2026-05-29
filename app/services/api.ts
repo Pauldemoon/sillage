@@ -30,6 +30,8 @@ export interface UserMemoryInput {
   savedTracks?: string[];
   skippedTracks?: string[];
   discoveryTolerance?: "low" | "medium" | "high";
+  // Voyages déjà entendus (Layer 3) : évite de resservir le même voyage.
+  heardJourneys?: string[];
 }
 
 export interface UserMemoryProfile extends Required<UserMemoryInput> {}
@@ -47,6 +49,9 @@ export interface Emission {
   editorialSummary?: string;
   memoryProfile?: UserMemoryProfile;
   memoryPatch?: MemoryPatch;
+  // Identifiant du voyage (Layer 3) — à mémoriser dans heardJourneys.
+  journeyId?: string;
+  cached?: boolean;
   tracks: EmissionTrack[];
   narrations: string[];
   audioUrls: string[];

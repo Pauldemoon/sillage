@@ -7,6 +7,7 @@ const KEY = "sillage:memory:v1";
 // qui finirait par gonfler le prompt envoyé au backend.
 const MAX_ARTISTS = 200;
 const MAX_TRACKS = 300;
+const MAX_JOURNEYS = 500;
 
 const EMPTY: UserMemoryInput = {
   knownArtists: [],
@@ -15,6 +16,7 @@ const EMPTY: UserMemoryInput = {
   savedTracks: [],
   skippedTracks: [],
   discoveryTolerance: "medium",
+  heardJourneys: [],
 };
 
 function uniq(values: string[] = []): string[] {
@@ -72,6 +74,22 @@ export async function mergeMemoryPatch(
 
   await saveMemory(next);
   return next;
+}
+
+// Mémorise un voyage entendu (Layer 3) pour ne plus le resservir.
+// Appelé après chaque émission avec le journeyId renvoyé par le backend.
+export async function rememberJourney(
+  journeyId: string | undefined,
+): Promise<void> {
+  if (!journeyId) return;
+  const current = await loadMemory();
+  await saveMemory({
+    ...current,
+    heardJourneys: cap(
+      uniq([...(current.heardJourneys || []), journeyId]),
+      MAX_JOURNEYS,
+    ),
+  });
 }
 
 // Signaux utilisateur explicites (pour une future UI like/dislike).
