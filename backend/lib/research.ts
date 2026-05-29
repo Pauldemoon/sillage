@@ -63,9 +63,11 @@ export async function researchArtist(
   const { label: genreLabel, domains } = pickDomains(genreSignals);
 
   // --- Phase 2 : Tavily ciblé sur la presse du genre ---
-  // Tavily est la SEULE source payante ici. On ne l'appelle que si les
-  // sources gratuites sont maigres : sinon elle n'ajoute qu'à la marge et
-  // consomme un crédit. Seuil : moins de 3 sources OU moins de 1200 caractères.
+  // Choix éditorial assumé : on interroge TOUJOURS la presse spécialisée
+  // (Pitchfork, Les Inrocks, Jazz Mag, Resident Advisor…) pour avoir de
+  // vraies plumes, pas seulement des métadonnées. Tavily est la seule source
+  // payante, mais le résultat est mis en cache 60 j : la presse n'est donc
+  // payée qu'UNE fois par morceau, jamais re-payée ensuite.
   const freeSources = [
     wikiArtist,
     wikiTrack,
@@ -75,10 +77,8 @@ export async function researchArtist(
     genius,
     discogs,
   ].filter((s): s is SourcedFact => s !== null);
-  const freeChars = freeSources.reduce((sum, s) => sum + s.content.length, 0);
-  const needsTavily = freeSources.length < 3 || freeChars < 1200;
 
-  const tavily = needsTavily ? await fetchTavily(title, artist, domains) : [];
+  const tavily = await fetchTavily(title, artist, domains);
 
   const all: SourcedFact[] = [...freeSources, ...tavily];
 
@@ -89,9 +89,8 @@ export async function researchArtist(
   }
 
   console.log(
-    `Genre détecté : ${genreLabel} → ${domains.join(", ")} | Tavily : ${
-      needsTavily ? "oui" : "non (sources gratuites suffisantes)"
-    }`,
+    `Genre détecté : ${genreLabel} → presse : ${domains.join(", ")} | ` +
+      `presse trouvée : ${tavily.length} extrait(s)`,
   );
 
   const result: ResearchResult = {
