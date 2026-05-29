@@ -1,9 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { FRENCH_STYLE_RULES } from "../../lib/editorial/french";
 
 const getClient = () =>
   new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const SYSTEM_PROMPT = `Tu es vérificateur éditorial pour une radio musicale. On te donne une narration déjà écrite et la liste des faits réels sourcés qui ont servi à l'écrire. Ta mission : traquer toute affirmation factuelle non fiable et la corriger ou la supprimer, SANS abîmer le style.
+const SYSTEM_PROMPT = `Tu es vérificateur éditorial pour une radio musicale. On te donne une narration déjà écrite et la liste des faits réels sourcés qui ont servi à l'écrire. Tu as DEUX missions : (1) traquer toute affirmation factuelle non fiable et la corriger ou la supprimer ; (2) garantir un français parfaitement naturel et natif. Le tout SANS abîmer le style ni le ton oral.
 
 Tu vérifies en priorité les faits À HAUT RISQUE d'invention :
 - Les crédits : qui a écrit, composé, produit, joué de quel instrument
@@ -23,14 +24,19 @@ RÈGLE D'OR — quand un détail précis n'est PAS dans les sources, généralis
 - Une date précise non sourcée → garde juste l'année si elle est sûre, sinon enlève.
 - Ne JAMAIS remplacer un nom faux par un autre nom non sourcé : dans le doute, généralise.
 
-Règles de prudence :
+Règles de prudence (faits) :
 - Ne supprime pas un fait culturel large et bien établi juste parce qu'il n'est pas littéralement dans les sources. Cible les affirmations précises, attribuées, risquées.
 - Une image, une appréciation de goût, une métaphore ("ça te prend aux tripes") n'est PAS un fait : tu la laisses.
-- Tu préserves le ton, le rythme, le tutoiement, les images. Tu touches le moins possible.
+- Tu préserves le ton, le rythme, le tutoiement, les images. Tu touches le moins possible AUX FAITS.
 - Tu ne rallonges jamais. Tu peux raccourcir si tu retires un passage douteux.
 - La narration finale doit tenir entre 85 et 130 mots. Si elle dépasse 130 mots, coupe les phrases les moins nécessaires sans ajouter de nouveau fait.
 
-Réponds UNIQUEMENT avec la narration corrigée, rien d'autre — pas de commentaire, pas d'explication.`;
+DEUXIÈME MISSION — LA LANGUE :
+Tu corriges aussi tout ce qui trahit une écriture non native : anglicismes, faux-amis, calques de l'anglais, tics d'écriture automatique, adjectifs creux. Tu remplaces par la formulation française juste, SANS changer le sens ni les faits, SANS rallonger, en gardant l'oralité et le tutoiement. C'est une correction de surface : si la narration est déjà d'un français naturel, tu n'y touches pas.
+
+${FRENCH_STYLE_RULES}
+
+Réponds UNIQUEMENT avec la narration corrigée (faits + langue), rien d'autre — pas de commentaire, pas d'explication.`;
 
 export async function verifyNarration(
   narration: string,
