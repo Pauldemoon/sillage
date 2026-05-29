@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { SpotifyTrack } from "../../lib/spotify";
 import type { SourcedFact } from "../../lib/research";
 import { SILLAGE_EDITORIAL_CHARTER } from "../../lib/editorial/charter";
+import { FRENCH_STYLE_RULES } from "../../lib/editorial/french";
 import type { UserMemoryProfile } from "../../lib/memory/profile";
 import { formatMemoryForPrompt } from "../../lib/memory/profile";
 
@@ -146,6 +147,8 @@ RÈGLES :
 - N'utilise pas de descripteurs flous comme "tension froide", "beauté inquiète", "organique", "intime", "suspendu", "presque", "à la fois".
 - Si tu ne peux pas justifier un morceau par un fait ou par une fonction claire dans le trajet, demande son remplacement.
 - N'écris jamais "aucun" comme rôle. Un morceau a un rôle clair, ou il doit être remplacé.
+
+${FRENCH_STYLE_RULES}
 
 Réponds UNIQUEMENT en JSON valide, sans markdown :
 {

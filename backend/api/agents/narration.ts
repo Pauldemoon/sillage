@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { SpotifyTrack } from "../../lib/spotify";
+import { FRENCH_STYLE_RULES } from "../../lib/editorial/french";
 
 const getClient = () =>
   new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -38,7 +39,9 @@ LA FLUIDITÉ :
 INTERDIT :
 - Répéter un fait, une date ou une formule déjà dits dans une narration précédente (on te les donne).
 - Les clichés : iconique, intemporel, captivant, fascinant, incontournable, légendaire, mythique, hymne d'une génération, remarquable, indéniablement, force est de constater.
-- Le name-dropping gratuit : un nom n'apparaît que si tu racontes quelque chose avec.`;
+- Le name-dropping gratuit : un nom n'apparaît que si tu racontes quelque chose avec.
+
+${FRENCH_STYLE_RULES}`;
 
 export async function generateNarration(
   tracks: SpotifyTrack[],
