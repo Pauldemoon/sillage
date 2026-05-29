@@ -262,9 +262,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const verificationFacts = [
         `[Angle de l'émission]\n${seedResearch.facts}`,
         `[Morceau courant]\n${dossiers[i].facts}`,
-        dossiers[i + 1]
-          ? `[Morceau suivant]\n${dossiers[i + 1].facts}`
-          : "",
+        dossiers[i + 1] ? `[Morceau suivant]\n${dossiers[i + 1].facts}` : "",
       ]
         .filter(Boolean)
         .join("\n\n---\n\n");
@@ -295,8 +293,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       audioBuffers[i] = buf;
     }
 
-    const audioUrls = audioBuffers.map(
-      (buf) => (buf ? `data:audio/mpeg;base64,${buf.toString("base64")}` : ""),
+    const audioUrls = audioBuffers.map((buf) =>
+      buf ? `data:audio/mpeg;base64,${buf.toString("base64")}` : "",
     );
 
     return res.json({

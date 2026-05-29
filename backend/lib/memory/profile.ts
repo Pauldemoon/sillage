@@ -68,7 +68,9 @@ export function buildMemoryPatch(
 ): MemoryPatch {
   return {
     heardArtists: uniq(tracks.map((track) => track.artist)),
-    heardTracks: uniq(tracks.map((track) => `${track.title} — ${track.artist}`)),
+    heardTracks: uniq(
+      tracks.map((track) => `${track.title} — ${track.artist}`),
+    ),
     discoveredArtists: uniq(
       tracks
         .slice(1)

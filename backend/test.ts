@@ -41,17 +41,11 @@ async function test() {
   );
 
   console.log("4. Agent 3 — narration intro...");
-  const narration = await generateNarration(
-    tracks,
-    angle,
-    description,
-    0,
-    {
-      emissionFacts: facts,
-      currentTrackFacts: facts,
-      nextTrackFacts: facts,
-    },
-  );
+  const narration = await generateNarration(tracks, angle, description, 0, {
+    emissionFacts: facts,
+    currentTrackFacts: facts,
+    nextTrackFacts: facts,
+  });
   console.log("   ✅ Narration:", narration.slice(0, 150) + "...");
 
   console.log("5. Agent 4 — voix ElevenLabs...");

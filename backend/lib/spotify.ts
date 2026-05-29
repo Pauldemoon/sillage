@@ -69,7 +69,9 @@ function isLikelyMatch(
   title: string,
   artist: string,
 ): boolean {
-  return matchesArtist(track.artist, artist) && matchesTitle(track.title, title);
+  return (
+    matchesArtist(track.artist, artist) && matchesTitle(track.title, title)
+  );
 }
 
 export async function searchTrack(
