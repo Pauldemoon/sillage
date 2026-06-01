@@ -11,6 +11,7 @@ import {
 } from "./agents/editor";
 import { planBroadcast } from "./agents/producer";
 import { researchArtist, type SourcedFact } from "../lib/research";
+import { uploadNarrationAudio } from "../lib/storage";
 import { findBestTrackMatch, type SpotifyTrack } from "../lib/spotify";
 import {
   buildMemoryPatch,
@@ -104,8 +105,16 @@ async function synthNarrations(narrationTexts: string[]): Promise<string[]> {
     audioBuffers[i] = buf;
   }
 
-  return audioBuffers.map((buf) =>
-    buf ? `data:audio/mpeg;base64,${buf.toString("base64")}` : "",
+  // Host each MP3 on Supabase Storage and return its public URL. expo-audio
+  // can stream a URL but not a base64 data URI; this also keeps the generate
+  // response tiny instead of multi-megabyte. Falls back to a data URI only if
+  // hosting is unavailable (degrades rather than breaks).
+  return Promise.all(
+    audioBuffers.map(async (buf) => {
+      if (!buf) return "";
+      const url = await uploadNarrationAudio(buf);
+      return url ?? `data:audio/mpeg;base64,${buf.toString("base64")}`;
+    }),
   );
 }
 
