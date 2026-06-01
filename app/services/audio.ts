@@ -1,31 +1,37 @@
-import { Audio } from "expo-av";
+import { createAudioPlayer, setAudioModeAsync, AudioPlayer } from "expo-audio";
 
-let currentSound: Audio.Sound | null = null;
+let currentPlayer: AudioPlayer | null = null;
 
 export async function setupAudio(): Promise<void> {
-  await Audio.setAudioModeAsync({
-    playsInSilentModeIOS: true,
-    staysActiveInBackground: true,
+  await setAudioModeAsync({
+    playsInSilentMode: true,
+    shouldPlayInBackground: true,
   });
 }
 
 export async function playNarration(base64Uri: string): Promise<void> {
   await stopAudio();
-  const { sound } = await Audio.Sound.createAsync({ uri: base64Uri });
-  currentSound = sound;
-  await sound.playAsync();
+  const player = createAudioPlayer({ uri: base64Uri });
+  currentPlayer = player;
+  player.play();
 
   await new Promise<void>((resolve) => {
-    sound.setOnPlaybackStatusUpdate((status) => {
-      if (status.isLoaded && status.didJustFinish) resolve();
-    });
+    const subscription = player.addListener(
+      "playbackStatusUpdate",
+      (status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          subscription.remove();
+          resolve();
+        }
+      },
+    );
   });
 }
 
 export async function stopAudio(): Promise<void> {
-  if (currentSound) {
-    await currentSound.stopAsync();
-    await currentSound.unloadAsync();
-    currentSound = null;
+  if (currentPlayer) {
+    currentPlayer.pause();
+    currentPlayer.remove();
+    currentPlayer = null;
   }
 }

@@ -7,7 +7,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "ios": {
-      "bundleIdentifier": "com.sillage.app",
+      "bundleIdentifier": "com.paulveyssiere.sillage.Sillage",
       "buildNumber": "1",
       "supportsTablet": false,
       "infoPlist": {
@@ -28,6 +28,6 @@
       "favicon": "./assets/favicon.png"
     },
     "scheme": "sillage",
-    "plugins": ["expo-router", "expo-dev-client"]
+    "plugins": ["expo-router", "expo-dev-client", "expo-audio"]
   }
 }
