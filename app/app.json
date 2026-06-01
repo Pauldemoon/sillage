@@ -36,7 +36,12 @@
       "favicon": "./assets/favicon.png"
     },
     "scheme": "sillage",
-    "plugins": ["expo-router", "expo-dev-client", "expo-audio"],
+    "plugins": [
+      "expo-router",
+      "expo-dev-client",
+      "expo-audio",
+      "./plugins/withSpotifyAuthRedirect"
+    ],
     "extra": {
       "router": {},
       "eas": {
