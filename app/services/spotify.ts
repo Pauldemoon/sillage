@@ -14,6 +14,10 @@ const spotifyConfig: ApiConfig = {
     ApiScope.AppRemoteControlScope,
     ApiScope.UserReadCurrentlyPlayingScope,
   ],
+  // Wake the Spotify app on authorization so SPTAppRemote can attach.
+  // Without this, a "cold" Spotify refuses the App Remote socket
+  // ("Connection refused"). "" resumes the last playback to activate it.
+  playURI: "",
 };
 
 let connected = false;
