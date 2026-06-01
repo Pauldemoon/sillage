@@ -11,12 +11,9 @@
       "buildNumber": "1",
       "supportsTablet": false,
       "infoPlist": {
-        "LSApplicationQueriesSchemes": [
-          "spotify"
-        ],
-        "UIBackgroundModes": [
-          "audio"
-        ]
+        "ITSAppUsesNonExemptEncryption": false,
+        "LSApplicationQueriesSchemes": ["spotify"],
+        "UIBackgroundModes": ["audio"]
       }
     },
     "android": {
@@ -38,11 +35,7 @@
       "favicon": "./assets/favicon.png"
     },
     "scheme": "sillage",
-    "plugins": [
-      "expo-router",
-      "expo-dev-client",
-      "expo-audio"
-    ],
+    "plugins": ["expo-router", "expo-dev-client", "expo-audio"],
     "extra": {
       "router": {},
       "eas": {
