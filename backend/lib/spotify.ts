@@ -122,11 +122,14 @@ export async function findBestTrackMatch(
   return match;
 }
 
-export async function searchTracks(query: string): Promise<SpotifyTrack[]> {
+export async function searchTracks(
+  query: string,
+  limit = 5,
+): Promise<SpotifyTrack[]> {
   const token = await getToken();
   const encoded = encodeURIComponent(query);
   const res = await axios.get(
-    `https://api.spotify.com/v1/search?q=${encoded}&type=track&limit=5`,
+    `https://api.spotify.com/v1/search?q=${encoded}&type=track&limit=${limit}`,
     { headers: { Authorization: `Bearer ${token}` } },
   );
 

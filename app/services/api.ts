@@ -77,3 +77,21 @@ export async function resolveSeedTrack(
   const res = await axios.post(`${BACKEND}/api/seed`, { title, artist });
   return res.data;
 }
+
+export interface TrackSuggestion {
+  id: string;
+  title: string;
+  artist: string;
+  cover: string;
+  spotifyUri: string;
+  duration: number;
+}
+
+export async function searchTracks(
+  query: string,
+): Promise<TrackSuggestion[]> {
+  const res = await axios.get(`${BACKEND}/api/search`, {
+    params: { q: query },
+  });
+  return res.data.tracks || [];
+}
