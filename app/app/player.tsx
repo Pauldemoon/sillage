@@ -284,24 +284,31 @@ export default function PlayerScreen() {
         ))}
       </View>
 
-      {/* Sources */}
-      <TouchableOpacity
-        style={styles.sourcesToggle}
-        onPress={() => setShowSources(!showSources)}
-      >
-        <Text style={styles.sourcesLabel}>
-          {showSources ? "Masquer les sources" : "Voir les sources"}
-        </Text>
-      </TouchableOpacity>
+      {/* Sources — only when the current track actually has any */}
+      {(track.sources?.length ?? 0) > 0 && (
+        <>
+          <TouchableOpacity
+            style={styles.sourcesToggle}
+            onPress={() => setShowSources(!showSources)}
+          >
+            <Text style={styles.sourcesLabel}>
+              {showSources ? "Masquer les sources" : "Voir les sources"}
+            </Text>
+          </TouchableOpacity>
 
-      {showSources && (
-        <View style={styles.sourcesList}>
-          {track.sources?.map((s, i) => (
-            <TouchableOpacity key={i} onPress={() => Linking.openURL(s.url)}>
-              <Text style={styles.sourceLink}>↗ {s.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+          {showSources && (
+            <View style={styles.sourcesList}>
+              {track.sources.map((s, i) => (
+                <TouchableOpacity
+                  key={i}
+                  onPress={() => Linking.openURL(s.url)}
+                >
+                  <Text style={styles.sourceLink}>↗ {s.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </>
       )}
     </View>
   );

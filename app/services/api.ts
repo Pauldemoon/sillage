@@ -87,9 +87,7 @@ export interface TrackSuggestion {
   duration: number;
 }
 
-export async function searchTracks(
-  query: string,
-): Promise<TrackSuggestion[]> {
+export async function searchTracks(query: string): Promise<TrackSuggestion[]> {
   const res = await axios.get(`${BACKEND}/api/search`, {
     params: { q: query },
   });
