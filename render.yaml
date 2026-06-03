@@ -1,0 +1,35 @@
+# Render Blueprint pour le backend Sillage (serveur Express persistant, sans
+# le cap 60 s de Vercel gratuit → la génération va au bout, Charlie intact).
+# Setup : Render → New → Blueprint → connecter le repo → renseigner les 10
+# variables d'env (sync:false) ci-dessous.
+services:
+  - type: web
+    name: sillage-backend
+    runtime: node
+    rootDir: backend
+    plan: free
+    region: frankfurt
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: SPOTIFY_CLIENT_ID
+        sync: false
+      - key: SPOTIFY_CLIENT_SECRET
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: DISCOGS_TOKEN
+        sync: false
+      - key: GENIUS_ACCESS_TOKEN
+        sync: false
+      - key: LASTFM_API_KEY
+        sync: false

@@ -67,6 +67,12 @@ export async function generateEmission(
     artist,
     memory,
   });
+  // Le backend stream un keep-alive pendant la génération (~100 s) pour ne pas
+  // se faire couper par le timeout réseau iOS. Conséquence : le code HTTP est
+  // figé à 200, donc une erreur arrive avec un champ `error` dans le corps.
+  if (res.data?.error) {
+    throw new Error(res.data.message || res.data.error);
+  }
   return res.data;
 }
 

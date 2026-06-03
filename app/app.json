@@ -9,12 +9,18 @@
     "newArchEnabled": false,
     "ios": {
       "bundleIdentifier": "com.paulveyssiere.sillage.Sillage",
-      "buildNumber": "1",
+      "buildNumber": "4",
       "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "LSApplicationQueriesSchemes": ["spotify"],
-        "UIBackgroundModes": ["audio"]
+        "LSApplicationQueriesSchemes": [
+          "spotify",
+          "spotify"
+        ],
+        "UIBackgroundModes": [
+          "audio",
+          "audio"
+        ]
       }
     },
     "android": {
@@ -26,6 +32,10 @@
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE",
@@ -48,6 +58,12 @@
         "projectId": "3db71d85-3654-48c2-a470-267d228c5f3c"
       }
     },
-    "owner": "sillagefm"
+    "owner": "sillagefm",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/3db71d85-3654-48c2-a470-267d228c5f3c"
+    }
   }
 }

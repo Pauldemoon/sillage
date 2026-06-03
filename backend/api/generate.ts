@@ -82,35 +82,33 @@ interface JourneyCore {
   narrations: string[];
 }
 
-// Synthèse vocale séquentielle (OpenAI TTS).
-// Chaque texte déjà synthétisé tape tts_cache → 0 appel API, quasi-instantané.
-async function synthNarrations(narrationTexts: string[]): Promise<string[]> {
-  const audioBuffers = Array<Buffer | null>(narrationTexts.length).fill(null);
-  for (let i = 0; i < narrationTexts.length; i++) {
-    const text = narrationTexts[i];
-    if (!text) continue;
-
-    let buf: Buffer | null = null;
-    for (let attempt = 0; attempt < 3 && !buf; attempt++) {
-      try {
-        buf = await generateVoice(text);
-      } catch (e: any) {
-        if (e?.response?.status === 429 && attempt < 2) {
-          await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
-        } else {
-          throw e;
-        }
+// Synthèse vocale d'un texte, avec retry sur 429. Chaque texte déjà
+// synthétisé tape tts_cache → 0 appel API, quasi-instantané.
+async function synthOne(text: string): Promise<Buffer | null> {
+  if (!text) return null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await generateVoice(text);
+    } catch (e: any) {
+      if (e?.response?.status === 429 && attempt < 2) {
+        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+      } else {
+        throw e;
       }
     }
-    audioBuffers[i] = buf;
   }
+  return null;
+}
 
-  // Host each MP3 on Supabase Storage and return its public URL. expo-audio
-  // can stream a URL but not a base64 data URI; this also keeps the generate
-  // response tiny instead of multi-megabyte. Falls back to a data URI only if
-  // hosting is unavailable (degrades rather than breaks).
+// Synthèse vocale EN PARALLÈLE (OpenAI TTS encaisse les appels concurrents ;
+// le séquentiel d'avant n'existait que pour le plan ElevenLabs Starter, retiré).
+// Chaque voix est hébergée sur Supabase Storage et renvoyée en URL : expo-audio
+// lit une URL mais pas un data-URI base64, et ça garde la réponse /generate
+// légère. Repli sur un data-URI seulement si l'hébergement échoue.
+async function synthNarrations(narrationTexts: string[]): Promise<string[]> {
   return Promise.all(
-    audioBuffers.map(async (buf) => {
+    narrationTexts.map(async (text) => {
+      const buf = await synthOne(text);
       if (!buf) return "";
       const url = await uploadNarrationAudio(buf);
       return url ?? `data:audio/mpeg;base64,${buf.toString("base64")}`;
@@ -301,7 +299,10 @@ async function curateDossiers(
 ): Promise<{ dossiers: TrackDossier[]; summaries: string[] }> {
   let current = dossiers;
   const summaries: string[] = [];
-  const maxReplacementRounds = 2;
+  // 0 = une seule review (attribution des rôles éditoriaux), SANS passe de
+  // remplacement : on évite une 2e vague de recherche + résolution Spotify,
+  // gros poste de latence. Compromis assumé pour tenir sous 60 s.
+  const maxReplacementRounds = 0;
 
   for (let pass = 0; pass <= maxReplacementRounds; pass++) {
     const review = await reviewPlaylist(
@@ -343,7 +344,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!title || !artist)
     return res.status(400).json({ error: "title and artist required" });
 
+  // La génération neuve dure ~100 s. La couche réseau d'iOS abandonne une
+  // requête restée sans octet ~60 s : on stream donc un espace toutes les 10 s
+  // pour garder la connexion vivante. Le corps final reste un JSON valide
+  // (espaces de tête autorisés). Effet de bord : dès qu'on a streamé, le code
+  // HTTP est figé à 200 → les erreurs se signalent via le champ `error`.
+  let heartbeat: ReturnType<typeof setInterval> | null = null;
+  const finishJson = (statusCode: number, body: unknown) => {
+    if (heartbeat) {
+      clearInterval(heartbeat);
+      heartbeat = null;
+    }
+    if (res.headersSent) {
+      res.end(JSON.stringify(body));
+    } else {
+      res.status(statusCode).json(body);
+    }
+  };
+
   try {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    (res as any).flushHeaders?.();
+    res.write(" ");
+    heartbeat = setInterval(() => {
+      try {
+        res.write(" ");
+      } catch {
+        // client déconnecté : on ignore.
+      }
+    }, 10000);
+
+    const _t0 = Date.now();
+    const _lap = (s: string) =>
+      console.error(`⏱ ${s} +${((Date.now() - _t0) / 1000).toFixed(1)}s`);
+
     const memoryProfile = buildMemoryProfile(memory);
     const heardJourneys: string[] = Array.isArray(memory?.heardJourneys)
       ? memory.heardJourneys
@@ -369,7 +403,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log(
         `Voyage réutilisé (${reusable.journeyId}, archétype ${core.archetype})`,
       );
-      return res.json({
+      return finishJson(200, {
         angle: core.angle,
         description: core.description,
         broadcastPlan: core.broadcastPlan,
@@ -386,6 +420,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Recherche initiale : elle sert à trouver l'angle global de l'émission.
     const seedResearch = await researchArtist(title, artist);
+    _lap("seedResearch");
 
     // Agent 1 — angle éditorial basé sur des faits réels.
     // On évite les archétypes déjà servis à cet auditeur pour cette graine.
@@ -395,6 +430,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       seedResearch.facts,
       heardArchetypesFor(journeyCandidates, heardJourneys),
     );
+    _lap("angle");
 
     // Agent 2 — playlist (nourrie du pool de candidats validés, Layer 2)
     const candidatePool = buildCandidatePool(journeyCandidates);
@@ -411,8 +447,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (tracks.length === 0) {
       throw new Error("No Spotify tracks found for generated playlist");
     }
+    _lap("playlist");
 
     const initialDossiers = await buildDossiers(tracks, seedResearch);
+    _lap("buildDossiers");
     const { dossiers, summaries: editorialSummaries } = await curateDossiers(
       title,
       artist,
@@ -421,6 +459,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       initialDossiers,
       memoryProfile,
     );
+    _lap("curateDossiers");
     const curatedTracks = dossiers.map((dossier) => dossier.track);
     const broadcastPlan = planBroadcast(curatedTracks);
     const narrationStartIndex = Math.min(
@@ -428,38 +467,56 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       Math.max(curatedTracks.length - 1, 0),
     );
 
-    // Agent 3 — narrations SÉQUENTIELLES, chacune consciente des précédentes
-    // pour éviter les répétitions et construire une vraie progression.
+    // Agent 3 — narrations EN PARALLÈLE (gros gain de latence). Chacune garde
+    // son contexte éditorial (angle, position, faits des morceaux voisins),
+    // mais perd la conscience du texte EXACT des autres : compromis assumé
+    // pour tenir sous la limite de 60 s. La progression reste portée par
+    // l'angle commun et les rôles éditoriaux assignés à chaque morceau.
     const narrationTexts = Array<string>(curatedTracks.length).fill("");
-    const spokenNarrations: string[] = [];
+    const drafts = Array<string>(curatedTracks.length).fill("");
+    const narrationIndices: number[] = [];
     for (let i = narrationStartIndex; i < curatedTracks.length; i++) {
-      const draft = await generateNarration(
-        curatedTracks,
-        angle,
-        description,
-        i,
-        {
-          emissionFacts: seedResearch.facts,
-          currentTrackFacts: dossiers[i].facts,
-          previousTrackFacts: dossiers[i - 1]?.facts,
-          nextTrackFacts: dossiers[i + 1]?.facts,
-        },
-        spokenNarrations,
-      );
-      // Agent 4 — vérification factuelle contre les sources
-      const verificationFacts = [
-        `[Angle de l'émission]\n${seedResearch.facts}`,
-        `[Morceau courant]\n${dossiers[i].facts}`,
-        dossiers[i + 1] ? `[Morceau suivant]\n${dossiers[i + 1].facts}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n\n---\n\n");
-      const verified = await verifyNarration(draft, verificationFacts);
-      narrationTexts[i] = verified;
-      spokenNarrations.push(verified);
+      narrationIndices.push(i);
     }
+    await Promise.all(
+      narrationIndices.map(async (i) => {
+        drafts[i] = await generateNarration(
+          curatedTracks,
+          angle,
+          description,
+          i,
+          {
+            emissionFacts: seedResearch.facts,
+            currentTrackFacts: dossiers[i].facts,
+            previousTrackFacts: dossiers[i - 1]?.facts,
+            nextTrackFacts: dossiers[i + 1]?.facts,
+          },
+          [],
+        );
+      }),
+    );
+    _lap("narrations");
+
+    // Agent 4 — vérification factuelle EN PARALLÈLE, hors du chemin critique :
+    // elle ne corrige que des détails, donc inutile de bloquer la génération
+    // de la narration suivante (gros gain de latence vs séquentiel).
+    await Promise.all(
+      drafts.map(async (draft, i) => {
+        if (!draft) return;
+        const verificationFacts = [
+          `[Angle de l'émission]\n${seedResearch.facts}`,
+          `[Morceau courant]\n${dossiers[i].facts}`,
+          dossiers[i + 1] ? `[Morceau suivant]\n${dossiers[i + 1].facts}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n\n---\n\n");
+        narrationTexts[i] = await verifyNarration(draft, verificationFacts);
+      }),
+    );
+    _lap("verify");
 
     const audioUrls = await synthNarrations(narrationTexts);
+    _lap("synthNarrations");
 
     const publicTracks = dossiers.map((dossier) => ({
       id: dossier.track.id,
@@ -493,7 +550,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       journeyCore,
     );
 
-    return res.json({
+    return finishJson(200, {
       angle,
       description,
       broadcastPlan,
@@ -508,7 +565,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (err: any) {
     console.error(err);
-    return res.status(500).json({
+    return finishJson(500, {
       error: "Generation failed",
       message: err.message,
       url: err.config?.url,

@@ -16,6 +16,7 @@ import {
   rememberJourney,
 } from "../services/memory";
 import { setupAudio, playNarration, stopAudio } from "../services/audio";
+import { logDebug, subscribeDebug } from "../services/debug";
 import {
   connectSpotify,
   playTrack,
@@ -32,6 +33,11 @@ type Phase =
   | "music"
   | "paused"
   | "done";
+
+// Délai d'anticipation : la narration suivante démarre ce nombre de ms AVANT
+// la fin réelle du morceau, pour chevaucher sa toute fin (duckée par iOS)
+// plutôt que de laisser un blanc, et pour garder l'App Remote vivante.
+const NARRATION_LEAD_MS = 7000;
 
 export default function PlayerScreen() {
   const {
@@ -56,8 +62,16 @@ export default function PlayerScreen() {
   const [phase, setPhase] = useState<Phase>("connecting");
   const [showSources, setShowSources] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [debugLines, setDebugLines] = useState<string[]>([]);
   const isPaused = useRef(false);
   const stopped = useRef(false);
+
+  // Abonnement au journal de debug (overlay à l'écran).
+  useEffect(() => subscribeDebug(setDebugLines), []);
+  // Trace chaque changement de phase.
+  useEffect(() => {
+    logDebug(`phase → ${phase}`);
+  }, [phase]);
 
   const tracks = emission?.tracks || (seedTrack ? [seedTrack] : []);
   const track = tracks[trackIndex] || tracks[0];
@@ -91,15 +105,26 @@ export default function PlayerScreen() {
       // tolérance à la découverte) pour la passer au backend : c'est ce qui
       // permet à la découverte de s'accumuler d'une émission à l'autre.
       const memory = await loadMemory();
+      logDebug(`generate "${title}" / "${artist}"…`);
       const generationPromise = generateEmission(title, artist, memory).then(
-        (data) => ({ data }),
-        (generationError) => ({ generationError }),
+        (data) => {
+          logDebug(
+            `generate OK: cached=${(data as any)?.cached} tracks=${data?.tracks?.length}`,
+          );
+          return { data };
+        },
+        (generationError) => {
+          logDebug(
+            `❌ generate: ${String(generationError?.message || generationError).slice(0, 120)}`,
+          );
+          return { generationError };
+        },
       );
 
       await connectSpotify();
       setPhase("music");
       await playTrack(seedTrack.spotifyUri);
-      await waitForTrackEnd(seedTrack.duration);
+      await waitForTrackEnd(seedTrack.duration, NARRATION_LEAD_MS);
       if (stopped.current) return;
 
       setPhase("preparing");
@@ -116,6 +141,9 @@ export default function PlayerScreen() {
       setEmission(generatedEmission);
       await playPreparedEmission(generatedEmission, true);
     } catch (e: any) {
+      logDebug(
+        `❌ ERREUR: ${String(e?.message || e).replace(/\s+/g, " ").slice(0, 220)}`,
+      );
       setError(e.message || "Erreur de connexion Spotify");
     }
   }
@@ -162,10 +190,15 @@ export default function PlayerScreen() {
 
     setPhase("music");
     await playTrack(data.tracks[index].spotifyUri);
-    await waitForTrackEnd(data.tracks[index].duration);
+    const hasNext = index < data.tracks.length - 1;
+    // On anticipe la fin seulement s'il reste une narration à enchaîner.
+    await waitForTrackEnd(
+      data.tracks[index].duration,
+      hasNext ? NARRATION_LEAD_MS : 0,
+    );
     if (stopped.current) return;
 
-    if (index < data.tracks.length - 1) {
+    if (hasNext) {
       await playSequence(data, index + 1);
     } else {
       setPhase("done");
@@ -188,6 +221,16 @@ export default function PlayerScreen() {
     }
   }
 
+  const debugOverlay = (
+    <ScrollView style={styles.debugBox} contentContainerStyle={{ padding: 6 }}>
+      {debugLines.map((l, i) => (
+        <Text key={i} style={styles.debugLine}>
+          {l}
+        </Text>
+      ))}
+    </ScrollView>
+  );
+
   if (error) {
     return (
       <View style={styles.container}>
@@ -198,6 +241,7 @@ export default function PlayerScreen() {
         >
           <Text style={styles.restartText}>Retour</Text>
         </TouchableOpacity>
+        {debugOverlay}
       </View>
     );
   }
@@ -310,6 +354,8 @@ export default function PlayerScreen() {
           )}
         </>
       )}
+
+      {debugOverlay}
     </View>
   );
 }
@@ -418,5 +464,21 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 15,
     marginBottom: 24,
+  },
+  debugBox: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    maxHeight: 220,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    borderTopWidth: 1,
+    borderTopColor: "#222",
+  },
+  debugLine: {
+    color: "#6f6",
+    fontSize: 10,
+    fontFamily: "Courier",
+    lineHeight: 14,
   },
 });

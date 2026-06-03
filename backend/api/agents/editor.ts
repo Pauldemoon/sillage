@@ -181,7 +181,10 @@ export async function reviewPlaylist(
   memory: UserMemoryProfile,
 ): Promise<EditorialReview> {
   const response = await getClient().messages.create({
-    model: "claude-sonnet-4-5",
+    // Haiku (et non Sonnet) pour la latence : la review attribue surtout des
+    // rôles éditoriaux à partir de faits déjà fournis — tâche que Haiku gère
+    // bien, ~3× plus vite. Gain ~12 s sur le total. Compromis assumé (<60 s).
+    model: "claude-haiku-4-5",
     max_tokens: 900,
     // Prompt caching : la charte éditoriale (longue) est identique à chaque
     // passe de relecture (jusqu'à 3 par émission) → −90% sur ces tokens.
