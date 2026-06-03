@@ -8,17 +8,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Check env vars
   results.env = {
     anthropic: !!process.env.ANTHROPIC_API_KEY,
-    elevenlabs: !!process.env.ELEVENLABS_API_KEY,
+    openai: !!process.env.OPENAI_API_KEY,
     spotify: !!process.env.SPOTIFY_CLIENT_ID,
-    firecrawl: !!process.env.FIRECRAWL_API_KEY,
+    tavily: !!process.env.TAVILY_API_KEY,
   };
 
-  // Test Firecrawl
+  // Test recherche documentaire (sources)
   try {
     const { sources } = await researchArtist("Nirvana", "Nirvana");
-    results.firecrawl = { ok: true, sources: sources.map((s) => s.source) };
+    results.research = { ok: true, sources: sources.map((s) => s.source) };
   } catch (e: any) {
-    results.firecrawl = { ok: false, error: e.message };
+    results.research = { ok: false, error: e.message };
   }
 
   // Test Anthropic

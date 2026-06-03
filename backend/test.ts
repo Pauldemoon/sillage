@@ -12,7 +12,7 @@ import * as fs from "fs";
 async function test() {
   const memory = buildMemoryProfile();
 
-  console.log("1. Test Spotify + Firecrawl...");
+  console.log("1. Test recherche documentaire (sources)...");
   const { facts, sources } = await researchArtist(
     "Smells Like Teen Spirit",
     "Nirvana",
@@ -48,7 +48,7 @@ async function test() {
   });
   console.log("   ✅ Narration:", narration.slice(0, 150) + "...");
 
-  console.log("5. Agent 4 — voix ElevenLabs...");
+  console.log("5. Agent 4 — voix OpenAI TTS...");
   const audio = await generateVoice(narration);
   fs.writeFileSync("test-output.mp3", audio);
   console.log("   ✅ Audio généré:", audio.length, "bytes → test-output.mp3");
