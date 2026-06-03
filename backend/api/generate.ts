@@ -82,7 +82,7 @@ interface JourneyCore {
   narrations: string[];
 }
 
-// Synthèse vocale séquentielle (plan ElevenLabs Starter = 2 requêtes max).
+// Synthèse vocale séquentielle (OpenAI TTS).
 // Chaque texte déjà synthétisé tape tts_cache → 0 appel API, quasi-instantané.
 async function synthNarrations(narrationTexts: string[]): Promise<string[]> {
   const audioBuffers = Array<Buffer | null>(narrationTexts.length).fill(null);
