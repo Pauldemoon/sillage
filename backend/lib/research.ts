@@ -70,18 +70,22 @@ export async function researchArtist(
   // vraies plumes, pas seulement des métadonnées. Tavily est la seule source
   // payante, mais le résultat est mis en cache 60 j : la presse n'est donc
   // payée qu'UNE fois par morceau, jamais re-payée ensuite.
-  const freeSources = [
-    wikiTrack,
-    musicbrainz,
-    audiodb,
-    lastfm,
-    genius,
-    discogs,
-  ].filter((s): s is SourcedFact => s !== null);
-
   const tavily = await fetchTavily(title, artist, domains);
 
-  const all: SourcedFact[] = [...freeSources, ...tavily];
+  // L'ORDRE du dossier = sa priorité éditoriale, parce que les agents en aval
+  // tronquent (la narration ne lit que les premiers milliers de caractères).
+  // On met donc EN TÊTE la matière qui raconte : la presse spécialisée (Tavily),
+  // puis les sources riches en faits précis (Genius, Discogs). Wikipédia ferme
+  // la marche — c'est le filet générique, pas le plat principal.
+  const all: SourcedFact[] = [
+    ...tavily,
+    genius,
+    discogs,
+    lastfm,
+    musicbrainz,
+    audiodb,
+    wikiTrack,
+  ].filter((s): s is SourcedFact => s !== null);
 
   const factBlocks = all.map((s) => `[${s.source}]\n${s.content}`);
 

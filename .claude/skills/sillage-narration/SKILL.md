@@ -45,6 +45,7 @@ Charlie fait les deux. Mais jamais au hasard — c'est un choix, sinon ça oscil
 - **Pas d'extrait audio.** Sillage joue des morceaux **entiers** (Spotify, contrainte deep-link). La consigne d'écoute pointe **le morceau entier qui arrive** (« quand ça démarre, écoute la voix derrière »), jamais un détail isolable.
 - **Pas de polyphonie.** Une seule voix de synthèse — pas de témoignages croisés à la France Inter.
 - **Pas d'invention.** Aucune date, aucun nom, aucune citation, aucun chiffre qui ne soit dans les faits sourcés. Dans le doute : généralise, ne devine pas.
+- **Pas de gabarit répété (à l'échelle de l'ÉPISODE).** Deux narrations ne partagent JAMAIS la même forme d'ouverture ni de chute (ex. interdit : ouvrir trois fois par « Le type qui arrive… », finir chaque fois par « Écoute… »). Chaque narration entre et sort autrement. ⚠️ Piège : remplacer une formule par une autre (« X, lui,… ») reste un gabarit. ⚠️ Invisible à une vérif narration-par-narration → ça ne se contrôle que sur l'épisode entier (une raison de plus pour une relecture globale, pas seulement un `verify` par morceau).
 
 ## 5 — La langue
 Français **oral** d'éditeur natif. Tutoiement, « on », élisions : bienvenus. Le français soigné de Sillage est **parlé, juste, sans faute** — jamais soutenu pour faire « propre » (« je vais », pas « je me rends »).
@@ -74,11 +75,17 @@ Le levier le plus puissant **n'est pas dans ce document**. Ce sont **3 à 5 narr
 
 > *Les règles ci-dessus **inspirent**. Les exemples **décident**. Un LLM imite un style à partir d'exemples bien mieux qu'à partir de règles.*
 
-**STATUT : VIDE.** Tant que ce paragraphe est vide, la skill n'est armée qu'à moitié.
+**STATUT : 1 exemple validé par l'oreille de Paul (2026-06-09).** Forgé par itération : draft IA → corrections de Paul ligne par ligne → version qui passe. *C'est ça, la méthode.* (Version longue = réservoir ; compression au format radio plus tard.)
 
-```
-### Exemple 1 — [mode] — transition [titre A] → [titre B]
-(à écrire)
+### Exemple 1 — OUVERTURE (ancrage) — graine : *Or Noir*, Kaaris
+> Quand *Or Noir* sort, en octobre 2013, ça fait déjà plus de dix ans que Kaaris rappe. Il vient de Sevran, il a passé la trentaine, et derrière lui il y a un long parcours de mixtapes et de freestyles resté dans l'underground. C'est son premier vrai album : dix-sept morceaux, un seul producteur, Therapy. La politique, les bons sentiments, il s'en cogne — c'est lui qui le dit. Ce qui l'intéresse, c'est la formule : « shit au gramme, vite on l'crame, tête de mort sur le pictogramme ».
+>
+> Mais le morceau que tu vas entendre n'a rien à voir avec cette violence. Il porte le titre de l'album, et c'est le seul où Kaaris laisse tomber le personnage et parle de lui : son enfance, sa famille, comment il en est arrivé là. C'est son préféré du disque. Et le beat, à l'origine, n'était même pas pour lui : il était pour Booba — celui qui l'a signé sur son label et l'a sorti de l'ombre. Booba le lui a laissé, avec une seule consigne : « bousille-le. »
 
-### Exemple 2 — …
-```
+**Pourquoi il passe (règles forgées en le corrigeant) :**
+- **Prose FLUIDE, zéro rythme slogan/punchline à l'américaine.** Pas de fragments-boutons (« Un sermon, pas une chanson. »). Ça coule.
+- **Aucun calque de l'anglais** — le tueur n°1 du « sonne IA » en français (ex. banni : « Booba, sa référence »).
+- **Le vrai langage de l'artiste, gardé brut** : « il s'en cogne », « bousille-le ». Une vraie citation crue > une paraphrase polie. Toujours.
+- **Doser** : aucun absolu non vérifié (« sans le moindre message » = faux ; « personne n'a retenu » = extrême).
+- **Dire une fois.** Pas trois reformulations de la même idée, pas deux « pour lui ».
+- Porté par **les faits + une anecdote** (le beat de Booba), des images nettes, zéro description creuse.

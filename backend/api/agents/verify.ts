@@ -61,7 +61,7 @@ export async function verifyNarration(
       {
         role: "user",
         content: `Faits réels sourcés (vérité de référence) :
-${facts.slice(0, 4000)}
+${facts.slice(0, 8000)}
 
 Narration à vérifier :
 ${narration}

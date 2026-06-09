@@ -7,6 +7,27 @@ import { SourcedFact } from "../research";
  * (Pitchfork, Rolling Stone, Les Inrocks, etc.) avec sources.
  * Clé gratuite sur https://tavily.com
  */
+
+// Nettoie le markdown que renvoie `raw_content` : images, liens, boutons de
+// partage, nav de page. On GARDE le texte des liens et on jette le reste —
+// sinon le dossier se remplit de « Partager / Facebook / Twitter » et d'URLs,
+// qui polluent le contexte des agents.
+function stripBoilerplate(raw: string): string {
+  return raw
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "") // images ![alt](url)
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1") // liens [texte](url) → texte
+    .replace(/https?:\/\/\S+/g, "") // URLs nues restantes
+    .replace(/[*_]+/g, "") // gras / italique markdown
+    .replace(/^[ \t]*[#>+\-]+[ \t]*/gm, "") // puces / titres en début de ligne
+    .replace(
+      /^[ \t]*(commenter|partager|facebook|twitter|google\+?|share|tweet|pinterest|whatsapp|email|imprimer|newsletter|publicit[ée]|s'abonner|abonnez-vous|menu|accueil|connexion|s'inscrire)[ \t)\]]*$/gim,
+      "",
+    ) // lignes de pure navigation / partage
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export async function fetchTavily(
   title: string,
   artist: string,
@@ -23,6 +44,11 @@ export async function fetchTavily(
         query: `"${title}" ${artist} signification analyse critique histoire`,
         search_depth: "advanced",
         max_results: 4,
+        // On veut l'ARTICLE complet, pas la bribe. Sans ça, Tavily ne renvoie
+        // qu'un extrait d'un paragraphe (`content`) : tout le corps d'une
+        // interview-fleuve (Abcdr, Konbini…) passe à la trappe. `raw_content`
+        // = le texte nettoyé de TOUTE la page. Mis en cache 60 j → payé 1 fois.
+        include_raw_content: true,
         include_domains:
           domains && domains.length
             ? domains
@@ -35,14 +61,14 @@ export async function fetchTavily(
                 "consequence.net",
               ],
       },
-      { timeout: 20000 },
+      { timeout: 30000 },
     );
 
     const results = res.data?.results || [];
     return results
-      .filter((r: any) => r.content)
+      .filter((r: any) => r.raw_content || r.content)
       .map((r: any) => ({
-        content: r.content.slice(0, 1200),
+        content: stripBoilerplate(r.raw_content || r.content).slice(0, 4000),
         source: new URL(r.url).hostname.replace("www.", ""),
         url: r.url,
       }));

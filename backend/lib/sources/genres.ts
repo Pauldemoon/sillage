@@ -85,9 +85,11 @@ export function pickDomains(signals: string): {
       return {
         label: "rap FR",
         domains: [
-          "booska-p.com",
           "abcdrduson.com",
+          "booska-p.com",
           "yard.media",
+          "raplume.fr",
+          "konbini.com",
           "lesinrocks.com",
           "mouv.fr",
         ],

@@ -10,32 +10,27 @@ import { buildMemoryProfile } from "./lib/memory/profile";
 import * as fs from "fs";
 
 async function test() {
+  const TITLE = process.argv[2] || "Smells Like Teen Spirit";
+  const ARTIST = process.argv[3] || "Nirvana";
+  console.log(`🎵 Graine : ${TITLE} — ${ARTIST}\n`);
   const memory = buildMemoryProfile();
 
   console.log("1. Test recherche documentaire (sources)...");
-  const { facts, sources } = await researchArtist(
-    "Smells Like Teen Spirit",
-    "Nirvana",
-  );
+  const { facts, sources } = await researchArtist(TITLE, ARTIST);
   console.log("   ✅ Sources:", sources.map((s) => s.source).join(", "));
+  console.log(`   📊 Dossier : ${facts.length} caractères`);
+  console.log(
+    "   — Début du dossier (= ce qui arrive en premier aux agents) —\n" +
+      facts.slice(0, 700) +
+      "\n",
+  );
 
   console.log("2. Agent 1 — angle...");
-  const { angle, description } = await generateAngle(
-    "Smells Like Teen Spirit",
-    "Nirvana",
-    facts,
-  );
+  const { angle, description } = await generateAngle(TITLE, ARTIST, facts);
   console.log("   ✅ Angle:", angle);
 
   console.log("3. Agent 2 — playlist...");
-  const tracks = await buildPlaylist(
-    "Smells Like Teen Spirit",
-    "Nirvana",
-    angle,
-    description,
-    facts,
-    memory,
-  );
+  const tracks = await buildPlaylist(TITLE, ARTIST, angle, description, facts, memory);
   tracks.forEach((t, i) =>
     console.log(`   ${i + 1}. ${t.title} — ${t.artist}`),
   );

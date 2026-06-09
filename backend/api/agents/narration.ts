@@ -84,10 +84,10 @@ ${context}
 ${transition}
 
 Faits globaux de l'émission — à utiliser pour tenir le fil rouge :
-${facts.emissionFacts.slice(0, 1500)}
+${facts.emissionFacts.slice(0, 2500)}
 
 Faits sourcés du morceau courant — priorité absolue pour toute affirmation factuelle :
-${facts.currentTrackFacts.slice(0, 3000)}
+${facts.currentTrackFacts.slice(0, 6000)}
 
 ${
   facts.previousTrackFacts
@@ -99,7 +99,7 @@ ${facts.previousTrackFacts.slice(0, 900)}`
 ${
   facts.nextTrackFacts
     ? `Faits du morceau suivant — seulement pour amorcer la suite :
-${facts.nextTrackFacts.slice(0, 1200)}`
+${facts.nextTrackFacts.slice(0, 2000)}`
     : ""
 }
 
