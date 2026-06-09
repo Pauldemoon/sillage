@@ -41,30 +41,6 @@ async function search(
   }
 }
 
-function isDisambiguation(text: string): boolean {
-  return (
-    /peut (faire|se) référer|may refer to|page d.homonymie|désigne notamment/i.test(
-      text,
-    ) || text.length < 60
-  );
-}
-
-export async function fetchWikipediaArtist(
-  artist: string,
-): Promise<SourcedFact | null> {
-  // 1. Essai direct
-  let r = await summary(artist, "fr");
-  // 2. Si homonymie ou trop court, recherche avec qualificatif musical
-  if (!r || isDisambiguation(r.text)) {
-    r =
-      (await search(`${artist} groupe musique`, "fr")) ||
-      (await search(`${artist} musicien`, "fr")) ||
-      r;
-  }
-  if (!r) return null;
-  return { content: r.text, source: "Wikipedia FR", url: r.url };
-}
-
 export async function fetchWikipediaTrack(
   title: string,
   artist: string,

@@ -1,4 +1,4 @@
-import { fetchWikipediaArtist, fetchWikipediaTrack } from "./sources/wikipedia";
+import { fetchWikipediaTrack } from "./sources/wikipedia";
 import { fetchMusicBrainz } from "./sources/musicbrainz";
 import { fetchTheAudioDB } from "./sources/theaudiodb";
 import { fetchLastFm } from "./sources/lastfm";
@@ -37,9 +37,11 @@ export async function researchArtist(
   }
 
   // --- Phase 1 : tout sauf Tavily ---
-  const [wikiArtist, wikiTrack, musicbrainz, audiodb, lastfm, genius, discogs] =
+  // Bio d'artiste : portée par Last.fm (plus vivante, en FR), PAS par la bio
+  // Wikipédia — trop générique et redondante. On garde la page Wikipédia du
+  // MORCEAU, qui apporte le contexte spécifique au titre.
+  const [wikiTrack, musicbrainz, audiodb, lastfm, genius, discogs] =
     await Promise.all([
-      fetchWikipediaArtist(artist),
       fetchWikipediaTrack(title, artist),
       fetchMusicBrainz(artist),
       fetchTheAudioDB(artist),
@@ -69,7 +71,6 @@ export async function researchArtist(
   // payante, mais le résultat est mis en cache 60 j : la presse n'est donc
   // payée qu'UNE fois par morceau, jamais re-payée ensuite.
   const freeSources = [
-    wikiArtist,
     wikiTrack,
     musicbrainz,
     audiodb,
