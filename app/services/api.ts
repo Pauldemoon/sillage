@@ -62,11 +62,15 @@ export async function generateEmission(
   artist: string,
   memory?: UserMemoryInput,
 ): Promise<Emission> {
-  const res = await axios.post(`${BACKEND}/api/generate`, {
-    title,
-    artist,
-    memory,
-  });
+  const res = await axios.post(
+    `${BACKEND}/api/generate`,
+    { title, artist, memory },
+    // La génération prend ~50-75 s. Sans timeout explicite, React Native
+    // applique un plafond ~60 s sur la requête → "Network Error". On fixe
+    // 180 s pour laisser la génération aller au bout (le backend stream un
+    // keep-alive en plus, ceinture + bretelles).
+    { timeout: 180000 },
+  );
   // Le backend stream un keep-alive pendant la génération (~100 s) pour ne pas
   // se faire couper par le timeout réseau iOS. Conséquence : le code HTTP est
   // figé à 200, donc une erreur arrive avec un champ `error` dans le corps.

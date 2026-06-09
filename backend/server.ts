@@ -13,6 +13,10 @@ import spotifyRefresh from "./api/spotify/refresh";
 
 const app = express();
 app.use(express.json({ limit: "2mb" }));
+// Le SDK Spotify (token swap/refresh) envoie en form-urlencoded, pas en JSON :
+// sans ce parseur, req.body est vide → "code required". Vercel le parsait
+// automatiquement ; sur Express il faut l'ajouter explicitement.
+app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 
 // CORS permissif (inoffensif : l'app native n'en a pas besoin, mais utile
 // pour tester depuis un navigateur).
