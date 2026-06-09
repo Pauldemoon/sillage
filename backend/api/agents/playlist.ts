@@ -53,7 +53,7 @@ ${SILLAGE_EDITORIAL_CHARTER}
 Règles :
 - Le morceau de départ est TOUJOURS le premier
 - Les 4 suivants doivent correspondre à l'angle éditorial
-- Cohérence de scène : pour une graine francophone, la MAJORITÉ des titres reste francophone (rap FR → rap FR, soul → soul). Un titre étranger est un accent RARE (un, à la rigueur deux), JAMAIS la majorité — une graine FR ne donne jamais une playlist 100 % étrangère. Une influence étrangère se raconte surtout dans la narration. Si l'angle est un croisement, il reste ANCRÉ dans la scène de la graine (l'étranger = contrepoint, pas destination). Souple mais pas n'importe quoi : au cas par cas, dans le doute reste à la maison. Même un angle de duel/croisement (ex. « Sevran contre Chicago ») garde la MAJORITÉ du côté de la graine : pour une graine FR, au moins 3 titres sur 5 sont francophones (la graine compte)
+- Cohérence de scène : la playlist SUIT l'angle, et n'est jamais figée. Une graine francophone donne le plus souvent une playlist francophone — et elle peut très bien être 100 % FR (une lignée, un mouvement local : rap FR → rap FR). Mais si l'angle est un vrai croisement ou un duel (ex. « Sevran contre Chicago »), la playlist peut faire dialoguer les deux scènes. La seule règle dure : pas de titres étrangers SANS que l'angle les justifie. À l'inverse, n'hésite jamais à rester 100 % dans la scène de la graine quand l'angle est local. Au cas par cas, ni « toujours FR » ni « toujours croisé »
 - Chaque morceau doit exister sur Spotify
 - Diversifie les artistes (pas 2 morceaux du même artiste)
 - Ordonne les morceaux pour créer une progression narrative cohérente avec les faits disponibles
