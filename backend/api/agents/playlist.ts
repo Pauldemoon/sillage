@@ -53,6 +53,7 @@ ${SILLAGE_EDITORIAL_CHARTER}
 Règles :
 - Le morceau de départ est TOUJOURS le premier
 - Les 4 suivants doivent correspondre à l'angle éditorial
+- Cohérence de scène (souple, jamais figée) : le plus souvent, les 5 titres restent dans l'univers de la graine (rap FR → rap FR, soul → soul). Une influence étrangère se raconte dans la narration, elle n'oblige PAS à mettre des titres étrangers dans la playlist. Croiser vers une autre scène/pays reste possible mais exceptionnel — seulement si l'angle le porte vraiment et que le lien saute aux yeux. Au cas par cas ; dans le doute, reste dans la scène de la graine
 - Chaque morceau doit exister sur Spotify
 - Diversifie les artistes (pas 2 morceaux du même artiste)
 - Ordonne les morceaux pour créer une progression narrative cohérente avec les faits disponibles

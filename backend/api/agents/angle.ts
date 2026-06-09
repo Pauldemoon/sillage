@@ -59,6 +59,7 @@ L'angle doit :
 - S'appuyer sur les faits fournis, jamais sur l'invention
 - Être spécifique et un peu inattendu — surtout pas "l'histoire du groupe"
 - Garantir une vraie cohérence entre les 5 morceaux (attention aux contradictions : ne propose pas un angle "contre l'Angleterre" si tu comptes mettre des groupes anglais)
+- La SCÈNE du voyage (souple, jamais figée) : le plus souvent, le voyage RESTE dans le monde de la graine (rap FR → rap FR, soul → soul), surtout pour une graine francophone — c'est le réflexe par défaut. Une influence étrangère, même revendiquée (ex. la drill de Chicago derrière un rappeur français), se RACONTE dans l'émission ; elle ne fait pas partir le voyage à l'étranger pour autant. Croiser pour de vrai vers une autre scène ou un autre pays reste possible, mais c'est l'EXCEPTION : seulement quand le lien est si fort et si évident que l'épisode serait bancal sans lui. Juge au cas par cas — ni "toujours français", ni "toujours croisé" — mais dans le doute, tu restes à la maison
 - Avoir un titre d'émission qui SONNE : court, rythmé, avec une accroche (4 à 9 mots)
 
 ${FRENCH_STYLE_RULES}
