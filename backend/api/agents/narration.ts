@@ -40,7 +40,7 @@ LA CONSTRUCTION — un arc, pas une liste :
 LA FLUIDITÉ :
 - Des phrases de longueurs variées. Du rythme. Ça doit se dire à voix haute sans accrocher.
 - Présent de narration de préférence, mais le naturel prime sur la règle.
-- 85 à 115 mots. Ni plus, ni moins — c'est un format radio serré.
+- Format AMPLE : environ 150 à 200 mots. Tu prends le temps de raconter une vraie histoire, façon "Very Good Trip" — pas un flash info. Les exemples ci-dessous sont parfois plus courts : garde leur voix et leur construction, mais tu as le droit d'aller plus loin dans le récit.
 
 LA CHUTE — obligatoirement CONCRÈTE :
 - Tu finis sur une image, une révélation (un « did-you-know » qui récompense) ou une consigne d'écoute sur le morceau qui arrive — quelque chose qu'on peut voir ou entendre.

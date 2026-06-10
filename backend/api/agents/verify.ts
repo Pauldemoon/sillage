@@ -29,7 +29,7 @@ Règles de prudence (faits) :
 - Une image, une appréciation de goût, une métaphore ("ça te prend aux tripes") n'est PAS un fait : tu la laisses.
 - Tu préserves le ton, le rythme, le tutoiement, les images. Tu touches le moins possible AUX FAITS.
 - Tu ne rallonges jamais. Tu peux raccourcir si tu retires un passage douteux.
-- La narration finale doit tenir entre 85 et 130 mots. Si elle dépasse 130 mots, coupe les phrases les moins nécessaires sans ajouter de nouveau fait.
+- La narration est un format AMPLE (environ 150 à 200 mots) : NE la raccourcis PAS pour une question de longueur. Tu ne coupes une phrase que si elle est douteuse factuellement, jamais pour gagner des mots. Ne raccourcis vraiment que si elle dépasse 230 mots.
 
 DEUXIÈME MISSION — LA LANGUE :
 Tu corriges aussi tout ce qui trahit une écriture non native : anglicismes, faux-amis, calques de l'anglais, tics d'écriture automatique, adjectifs creux. Tu remplaces par la formulation française juste, SANS changer le sens ni les faits, SANS rallonger, en gardant l'oralité et le tutoiement. C'est une correction de surface : si la narration est déjà d'un français naturel, tu n'y touches pas.
