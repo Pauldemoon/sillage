@@ -4,6 +4,26 @@ import { getCachedTrack, setCachedTrack } from "./cache/matter";
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID!;
 const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET!;
 
+// L'API Spotify a des passages instables (vagues de 500/503 intermittents).
+// Une génération représente 90-160 s de travail : on ne la laisse pas mourir
+// sur UN appel raté. Retry court sur 5xx/429/réseau, erreurs 4xx immédiates.
+async function withRetry<T>(label: string, run: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      return await run();
+    } catch (e) {
+      lastError = e;
+      const status = axios.isAxiosError(e) ? e.response?.status : undefined;
+      const retryable = status === undefined || status >= 500 || status === 429;
+      if (!retryable || attempt === 3) throw e;
+      console.error(`spotify ${label}: ${status ?? "réseau"}, retry ${attempt}`);
+      await new Promise((r) => setTimeout(r, attempt * 1500));
+    }
+  }
+  throw lastError;
+}
+
 let tokenCache: { token: string; expires: number } | null = null;
 
 async function getToken(): Promise<string> {
@@ -11,17 +31,19 @@ async function getToken(): Promise<string> {
     return tokenCache.token;
   }
 
-  const res = await axios.post(
-    "https://accounts.spotify.com/api/token",
-    "grant_type=client_credentials",
-    {
-      headers: {
-        Authorization:
-          "Basic " +
-          Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString("base64"),
-        "Content-Type": "application/x-www-form-urlencoded",
+  const res = await withRetry("token", () =>
+    axios.post(
+      "https://accounts.spotify.com/api/token",
+      "grant_type=client_credentials",
+      {
+        headers: {
+          Authorization:
+            "Basic " +
+            Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString("base64"),
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
       },
-    },
+    ),
   );
 
   tokenCache = {
@@ -81,9 +103,11 @@ export async function searchTrack(
 ): Promise<SpotifyTrack | null> {
   const token = await getToken();
   const query = encodeURIComponent(`track:${title} artist:${artist}`);
-  const res = await axios.get(
-    `https://api.spotify.com/v1/search?q=${query}&type=track&limit=1`,
-    { headers: { Authorization: `Bearer ${token}` } },
+  const res = await withRetry("searchTrack", () =>
+    axios.get(
+      `https://api.spotify.com/v1/search?q=${query}&type=track&limit=1`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
   );
 
   const item = res.data.tracks?.items?.[0];
@@ -128,9 +152,11 @@ export async function searchTracks(
 ): Promise<SpotifyTrack[]> {
   const token = await getToken();
   const encoded = encodeURIComponent(query);
-  const res = await axios.get(
-    `https://api.spotify.com/v1/search?q=${encoded}&type=track&limit=${limit}`,
-    { headers: { Authorization: `Bearer ${token}` } },
+  const res = await withRetry("searchTracks", () =>
+    axios.get(
+      `https://api.spotify.com/v1/search?q=${encoded}&type=track&limit=${limit}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
   );
 
   return (res.data.tracks?.items || []).map((item: any) => ({
