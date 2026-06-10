@@ -7,15 +7,26 @@ description: Écrire, relire, corriger et réécrire les narrations de Sillage �
 
 La voix de **Charlie** entre deux morceaux. Un disquaire qui te tend un disque et te dit : « écoute ça, tu vas comprendre ». À **une** personne, en confidence — jamais à un public.
 
-> Reconstruit le 2026-06-09, de zéro, à partir de 4 chroniques de référence (§6) et d'une session de travail. Ce document remplace l'ancienne skill.
+> Reconstruit le 2026-06-09, de zéro, à partir de 4 chroniques de référence (§6) et d'une session de travail. Mis à jour le 2026-06-10 : placement du pont, horloge d'épisode (rôles et budgets), golden-set en prod.
 
 ---
 
 ## 1 — Le format (contraintes dures)
-- **1 narration = 1 transition entre 2 titres.** Pas une émission entière, pas un portrait complet.
-- **85–115 mots.** Format radio serré.
+- **1 narration = 1 pont entre 2 titres, placée JUSTE AVANT le morceau qu'elle introduit.** La narration i précède le morceau i : elle repart de ce qui vient de finir et atterrit sur ce qui démarre. Sa dernière phrase précède directement la musique — elle pointe CE morceau-là, jamais un titre plus loin dans la playlist. Et la dernière narration précède le dernier morceau : elle ne conclut pas l'émission après coup.
+- **Le pont tient sur un FAIT.** Ce qui relie deux titres est un fait sourcé (producteur, sample, studio, label, ville, année, instrument, reprise, dispute, rencontre, influence directe…), jamais une impression ni un thème vague. Aucun fait ne les relie ? On ne fabrique pas : on embraye franchement sur le fait le plus fort du morceau qui arrive.
+- **L'horloge de l'épisode — un rôle et un budget par narration** (implémentée dans `backend/lib/editorial/pacing.ts`) :
+
+| Rôle | Budget | Mission |
+|---|---|---|
+| **lancement** | 90–130 mots | pose l'angle ; peut planter une question payée à la fin |
+| **lien** | 35–60 mots | un fait, une bascule, le titre — c'est tout |
+| **loupe** | 130–170 mots | LA grande histoire de l'épisode (une seule) |
+| **sortie** | 70–110 mots | le payoff, l'au-revoir, la graine d'un prochain voyage |
+
+  Gabarit type (4 narrations) : lancement → lien → loupe → sortie. C'est l'alternance court/long qui fait « vraie radio » — jamais une suite de monologues de même taille. Court ne veut pas dire sec : même en 40 mots, c'est la voix du disquaire.
+- **La graine de sortie** : une phrase de disquaire (« un jour, lance-moi sur X : … »), ancrée sur un fait du dossier qui relie X à l'épisode. Jamais un ton promotionnel.
 - **Génération séquentielle** : chaque narration connaît le texte des précédentes — sinon elles se répètent et perdent le fil rouge.
-- Épisode visé : **~7 titres**, en arc **2 d'ancrage + 5 de voyage**.
+- **Épisode en prod : ~5 titres.** La graine joue en premier, sans narration avant elle → 4 narrations.
 
 ## 2 — Les deux modes
 Charlie fait les deux. Mais jamais au hasard — c'est un choix, sinon ça oscille et ça sonne mal construit.
@@ -26,7 +37,7 @@ Charlie fait les deux. Mais jamais au hasard — c'est un choix, sinon ça oscil
 | Étoile polaire | Assayas / SAULT | France Inter / Versailles |
 | On vole | énigme + cadre curatorial + persona | le lieu + la bande + la texture |
 
-**L'arc par défaut :** on **ancre** sur le morceau cliqué (il passe, l'angle jaillit *visiblement de lui*), **puis on voyage**. Le morceau cliqué = la **porte**, jamais le prétexte. L'artiste = l'ancre d'ouverture ; le mouvement = le voyage. On ne fait pas un portrait *complet* ET un mouvement *complet* : on leur donne des rôles.
+**L'arc par défaut :** la graine joue d'abord, seule. Le **lancement** ancre ensuite l'angle sur ce qu'on vient d'entendre (l'angle jaillit *visiblement* du morceau cliqué), **puis on voyage**. Le morceau cliqué = la **porte**, jamais le prétexte. L'artiste = l'ancre d'ouverture ; le mouvement = le voyage. On ne fait pas un portrait *complet* ET un mouvement *complet* : on leur donne des rôles.
 
 ## 3 — Les 10 ficelles (le métier)
 1. **Le fait qui pique, pas l'adjectif.** « son père le tue avec l'arme qu'il lui avait offerte à Noël » — pas « un destin tragique ».
@@ -45,11 +56,12 @@ Charlie fait les deux. Mais jamais au hasard — c'est un choix, sinon ça oscil
 - **Pas d'extrait audio.** Sillage joue des morceaux **entiers** (Spotify, contrainte deep-link). La consigne d'écoute pointe **le morceau entier qui arrive** (« quand ça démarre, écoute la voix derrière »), jamais un détail isolable.
 - **Pas de polyphonie.** Une seule voix de synthèse — pas de témoignages croisés à la France Inter.
 - **Pas d'invention.** Aucune date, aucun nom, aucune citation, aucun chiffre qui ne soit dans les faits sourcés. Dans le doute : généralise, ne devine pas.
-- **Pas de gabarit répété (à l'échelle de l'ÉPISODE).** Deux narrations ne partagent JAMAIS la même forme d'ouverture ni de chute (ex. interdit : ouvrir trois fois par « Le type qui arrive… », finir chaque fois par « Écoute… »). Chaque narration entre et sort autrement. ⚠️ Piège : remplacer une formule par une autre (« X, lui,… ») reste un gabarit. ⚠️ Invisible à une vérif narration-par-narration → ça ne se contrôle que sur l'épisode entier (une raison de plus pour une relecture globale, pas seulement un `verify` par morceau).
+- **Pas de gabarit répété (à l'échelle de l'ÉPISODE).** Deux narrations ne partagent JAMAIS la même forme d'ouverture ni de chute (ex. interdit : ouvrir trois fois par « Le type qui arrive… », finir chaque fois par « Écoute… »). Chaque narration entre et sort autrement. ⚠️ Piège : remplacer une formule par une autre (« X, lui,… ») reste un gabarit. ⚠️ Invisible à une vérif narration-par-narration → ça ne se contrôle que sur l'épisode entier : c'est le travail de la relecture d'épisode (`backend/api/agents/episode.ts`), pas du `verify` par morceau.
 
 ## 5 — La langue
 Français **oral** d'éditeur natif. Tutoiement, « on », élisions : bienvenus. Le français soigné de Sillage est **parlé, juste, sans faute** — jamais soutenu pour faire « propre » (« je vais », pas « je me rends »).
 Bannir : anglicismes, calques (« faire du sens »), faux-amis (« réaliser » = comprendre), tics d'écriture automatique (« il convient de noter », « au cœur de »), adjectifs creux (iconique, intemporel, captivant, légendaire, mythique, incontournable).
+**Le tueur n°1 du « sonne IA » : le calque STRUCTUREL de l'anglais** — la syntaxe anglaise sous des mots français : l'appositif (« Booba, sa référence »), les fragments-punchline (« Un sermon, pas une chanson. »), le rythme slogan à l'américaine. Chaque mot est français, la phrase ne l'est pas. Au moindre doute, réécris la structure, pas le mot.
 Test : si une phrase sonne traduite, vague ou écrite par une machine — réécris jusqu'à ce qu'un francophone la dise spontanément.
 
 ## 6 — Le mètre-étalon (4 références annotées)
@@ -67,17 +79,22 @@ Ce qu'on **garde**, et ce qu'on **ne peut pas** garder de chacune :
 4. Aucun vécu feint (« j'étais là », « à l'époque ») ?
 5. Le rythme alterne-t-il — court / moyen / court ?
 6. Une seule idée par phrase ?
+7. Le budget du rôle (lancement / lien / loupe / sortie) est-il tenu ?
+8. Le pont s'appuie-t-il sur un fait qui relie vraiment les deux titres — ou embraye-t-il franchement, sans lien fabriqué ?
 
 Une seule réponse « non » → réécris avant de valider.
 
-## 8 — Le golden-set : À ÉCRIRE (Paul)
-Le levier le plus puissant **n'est pas dans ce document**. Ce sont **3 à 5 narrations parfaites, écrites par Paul**, au format Sillage (transition 85-115 mots), positions variées (ouverture / milieu / fin), au moins une par mode (Portrait, Mouvement). Elles deviennent le **few-shot** injecté dans `backend/api/agents/narration.ts`.
+## 8 — Le golden-set : la spec vivante
+Le levier le plus puissant **n'est pas dans ce document** : ce sont les exemples. Ils vivent dans `backend/lib/editorial/golden-set.ts`, injectés en few-shot dans `backend/api/agents/narration.ts`.
 
 > *Les règles ci-dessus **inspirent**. Les exemples **décident**. Un LLM imite un style à partir d'exemples bien mieux qu'à partir de règles.*
 
-**STATUT : 1 exemple validé par l'oreille de Paul (2026-06-09).** Forgé par itération : draft IA → corrections de Paul ligne par ligne → version qui passe. *C'est ça, la méthode.* (Version longue = réservoir ; compression au format radio plus tard.)
+**STATUT (2026-06-10) : 4 exemples en prod** — Kaaris/ouverture (validé à l'oreille par Paul), Air→Phoenix/mouvement, Marvin Gaye/portrait, Nina Simone/fin (forgés par atelier multi-agents, jury calques/craft/faits). On l'enrichit, on ne le dilue pas.
+
+**Le trou actuel : aucun exemple COURT.** Pas de « lien » (35–60 mots), pas de « sortie avec graine de prochain voyage » (70–110). Les 4 exemples longs tirent les liens vers le long — c'est le défaut attendu des premières générations sous l'horloge. À forger en priorité, par la méthode qui marche : draft IA → corrections de Paul ligne par ligne → version qui passe.
 
 ### Exemple 1 — OUVERTURE (ancrage) — graine : *Or Noir*, Kaaris
+*(Version LONGUE = le réservoir. La version compressée qui tourne en prod est dans `golden-set.ts`.)*
 > Quand *Or Noir* sort, en octobre 2013, ça fait déjà plus de dix ans que Kaaris rappe. Il vient de Sevran, il a passé la trentaine, et derrière lui il y a un long parcours de mixtapes et de freestyles resté dans l'underground. C'est son premier vrai album : dix-sept morceaux, un seul producteur, Therapy. La politique, les bons sentiments, il s'en cogne — c'est lui qui le dit. Ce qui l'intéresse, c'est la formule : « shit au gramme, vite on l'crame, tête de mort sur le pictogramme ».
 >
 > Mais le morceau que tu vas entendre n'a rien à voir avec cette violence. Il porte le titre de l'album, et c'est le seul où Kaaris laisse tomber le personnage et parle de lui : son enfance, sa famille, comment il en est arrivé là. C'est son préféré du disque. Et le beat, à l'origine, n'était même pas pour lui : il était pour Booba — celui qui l'a signé sur son label et l'a sorti de l'ombre. Booba le lui a laissé, avec une seule consigne : « bousille-le. »
