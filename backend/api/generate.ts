@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { randomUUID } from "crypto";
 import { generateAngle } from "./agents/angle";
 import { buildPlaylist } from "./agents/playlist";
 import { generateNarration } from "./agents/narration";
@@ -338,7 +339,109 @@ async function curateDossiers(
   return { dossiers: current, summaries };
 }
 
+// --- Génération ASYNCHRONE (jobs) -----------------------------------------
+// iOS coupe DUR toute requête HTTP à 60 s (limite native NSURLSession, non
+// contournable côté JS/OTA — le heartbeat ne suffit pas). Une génération neuve
+// dure ~110-160 s → impossible à tenir en une seule requête. On découpe :
+//   POST {title,artist,memory} → démarre un job, renvoie {jobId} tout de suite
+//   POST {jobId}               → renvoie {status:"pending"|"done"|"error"}
+// Chaque requête est courte → jamais le mur des 60 s. Le travail lourd tourne
+// en fond. Stockage en mémoire (Railway = 1 instance) ; si le service
+// redémarre pendant un job, le poll renvoie "inconnu" et l'app relance.
+type Job =
+  | { status: "pending"; ts: number }
+  | { status: "done"; result: unknown; ts: number }
+  | { status: "error"; message: string; ts: number };
+
+const jobs = new Map<string, Job>();
+const JOB_TTL_MS = 15 * 60 * 1000;
+
+function sweepJobs() {
+  const now = Date.now();
+  for (const [id, job] of jobs) {
+    if (now - job.ts > JOB_TTL_MS) jobs.delete(id);
+  }
+}
+
+// Lance la génération en fond en réutilisant runHandler TEL QUEL, via un faux
+// res qui capture le JSON final au lieu de l'écrire sur une socket.
+function startGenerationJob(
+  title: string,
+  artist: string,
+  memory: unknown,
+): string {
+  const id = randomUUID();
+  jobs.set(id, { status: "pending", ts: Date.now() });
+
+  const mockRes: any = {
+    headersSent: false,
+    setHeader() {},
+    flushHeaders() {},
+    write() {},
+    end() {},
+    status(code: number) {
+      this._code = code;
+      return this;
+    },
+    json(body: any) {
+      if ((this._code && this._code >= 400) || body?.error) {
+        jobs.set(id, {
+          status: "error",
+          message: body?.message || body?.error || "Génération échouée",
+          ts: Date.now(),
+        });
+      } else {
+        jobs.set(id, { status: "done", result: body, ts: Date.now() });
+      }
+    },
+  };
+
+  Promise.resolve(
+    runHandler(
+      { method: "POST", body: { title, artist, memory } } as any,
+      mockRes,
+    ),
+  ).catch((err: any) => {
+    console.error(err);
+    jobs.set(id, {
+      status: "error",
+      message: err?.message || "Erreur interne",
+      ts: Date.now(),
+    });
+  });
+
+  return id;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== "POST") return res.status(405).end();
+  const { jobId, title, artist, memory } = req.body || {};
+
+  // Poll : l'app interroge un job déjà lancé. Requête courte.
+  if (jobId) {
+    const job = jobs.get(jobId);
+    if (!job) {
+      return res.status(200).json({
+        status: "error",
+        message: "Job inconnu (serveur redémarré ?) — relance l'émission.",
+      });
+    }
+    if (job.status === "pending") return res.status(200).json({ status: "pending" });
+    jobs.delete(jobId);
+    if (job.status === "error")
+      return res.status(200).json({ status: "error", message: job.message });
+    return res.status(200).json({ status: "done", emission: job.result });
+  }
+
+  // Démarrage : on crée le job et on rend la main immédiatement.
+  if (!title || !artist)
+    return res.status(400).json({ error: "title and artist required" });
+  sweepJobs();
+  const id = startGenerationJob(title, artist, memory);
+  return res.status(200).json({ status: "pending", jobId: id });
+}
+
+async function runHandler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).end();
 
   const { title, artist, memory } = req.body;

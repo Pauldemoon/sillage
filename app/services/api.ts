@@ -66,41 +66,64 @@ export interface Emission {
   audioUrls: string[];
 }
 
+// La génération neuve dure ~110-160 s (narrations séquentielles + relecture
+// d'épisode). Impossible de la tenir en UNE requête : iOS coupe DUR toute
+// requête HTTP à 60 s (limite native NSURLSession, non contournable côté JS).
+// On passe donc en ASYNCHRONE : on démarre un job (requête courte), puis on
+// interroge le résultat toutes les 3 s (requêtes courtes) → jamais le mur des
+// 60 s. Tout ça tourne en fond pendant que le morceau de départ joue.
+const POLL_INTERVAL_MS = 3000;
+const GENERATION_DEADLINE_MS = 5 * 60 * 1000;
+
 export async function generateEmission(
   title: string,
   artist: string,
   memory?: UserMemoryInput,
 ): Promise<Emission> {
-  let res;
+  // 1) Démarrer le job — requête courte, renvoie un jobId immédiatement.
+  let start;
   try {
-    res = await axios.post(
+    start = await axios.post(
       `${BACKEND}/api/generate`,
       { title, artist, memory },
-      // La génération NEUVE est désormais SÉQUENTIELLE (narrations qui se
-      // lisent l'une l'autre + relecture d'épisode) : ~110-160 s, jusqu'à
-      // ~200 s sur une graine lourde. On laisse 300 s pour ne jamais couper
-      // alors que le serveur travaille encore (sinon axios abandonne et
-      // l'app croit le backend "injoignable"). Le backend stream un espace
-      // toutes les 10 s pour garder la connexion vivante pendant ce temps.
-      // La génération tourne EN FOND pendant que le morceau de départ joue,
-      // donc cette durée ne se voit pas (sauf graine très courte).
-      { timeout: 300000 },
+      { timeout: 20000 },
     );
   } catch (e: any) {
-    // Pas de réponse du tout (DNS, connexion refusée, hôte injoignable) :
-    // le "Network Error" générique d'axios ne dit pas QUI était visé.
     if (!e?.response) {
       throw new Error(`Backend injoignable (${BACKEND}) — ${e?.message}`);
     }
     throw e;
   }
-  // Le backend stream un keep-alive pendant la génération (~100 s) pour ne pas
-  // se faire couper par le timeout réseau iOS. Conséquence : le code HTTP est
-  // figé à 200, donc une erreur arrive avec un champ `error` dans le corps.
-  if (res.data?.error) {
-    throw new Error(res.data.message || res.data.error);
+  // Compat : si un ancien backend renvoie directement l'émission, on la prend.
+  if (start.data?.tracks) return start.data;
+  if (start.data?.error) throw new Error(start.data.message || start.data.error);
+  const jobId = start.data?.jobId;
+  if (!jobId) throw new Error("Démarrage de la génération impossible");
+
+  // 2) Poller le résultat — chaque requête est courte, donc jamais coupée.
+  const deadline = Date.now() + GENERATION_DEADLINE_MS;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+    let poll;
+    try {
+      poll = await axios.post(
+        `${BACKEND}/api/generate`,
+        { jobId },
+        { timeout: 20000 },
+      );
+    } catch (e: any) {
+      // Hoquet réseau ponctuel sur un poll : on retente au prochain tick.
+      if (!e?.response) continue;
+      throw e;
+    }
+    const data = poll.data;
+    if (data?.status === "done") return data.emission as Emission;
+    if (data?.status === "error") {
+      throw new Error(data.message || "Génération échouée");
+    }
+    // status "pending" → on continue d'attendre.
   }
-  return res.data;
+  throw new Error("La génération a pris trop de temps (5 min)");
 }
 
 export async function resolveSeedTrack(
