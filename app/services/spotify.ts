@@ -93,17 +93,16 @@ export async function playTrack(spotifyUri: string): Promise<void> {
   await ensureConnected();
   logDebug(`playUri ${spotifyUri.slice(0, 28)}…`);
   await SpotifyRemote.playUri(spotifyUri);
-  // On laisse Spotify basculer sur le morceau (~1,5 s) avant de lire l'état,
-  // sinon on voit encore le morceau précédent. Vérifie que la lecture a
-  // VRAIMENT démarré sur le bon titre (et pas sur un autre appareil).
-  await new Promise((r) => setTimeout(r, 1500));
-  try {
-    const st: any = await SpotifyRemote.getPlayerState();
-    logDebug(
-      `state: "${st?.track?.name ?? "?"}" paused=${st?.isPaused} pos=${st?.playbackPosition}`,
-    );
-  } catch (e) {
-    logError("getPlayerState", e);
+
+  // Spotify peut accepter la commande avant d'avoir réellement basculé de
+  // morceau. On attend le bon URI, sinon l'enchaînement se cale sur l'ancien
+  // titre et la suite part de travers.
+  const started = await waitForExpectedTrack(spotifyUri);
+  if (!started) {
+    logDebug("⚠️ playUri non confirmé, nouvelle tentative…");
+    await ensureConnected();
+    await SpotifyRemote.playUri(spotifyUri);
+    await waitForExpectedTrack(spotifyUri);
   }
 }
 
@@ -116,15 +115,77 @@ export async function resumeTrack(): Promise<void> {
   await SpotifyRemote.resume();
 }
 
-// Attend la fin du morceau, mais rend la main `leadMs` AVANT la fin réelle
-// pour que la narration suivante démarre en chevauchant la toute fin du
-// morceau (qui se fait ducker par iOS) au lieu de subir un blanc.
+function sameUri(a?: string, b?: string): boolean {
+  return !!a && !!b && a.split("#")[0] === b.split("#")[0];
+}
+
+async function waitForExpectedTrack(spotifyUri: string): Promise<boolean> {
+  const deadline = Date.now() + 8000;
+  while (Date.now() < deadline) {
+    try {
+      const st: any = await SpotifyRemote.getPlayerState();
+      const uri = st?.track?.uri;
+      logDebug(
+        `state: "${st?.track?.name ?? "?"}" paused=${st?.isPaused} pos=${st?.playbackPosition}`,
+      );
+      if (sameUri(uri, spotifyUri) && !st?.isPaused) return true;
+    } catch (e) {
+      logError("getPlayerState", e);
+      await ensureConnected();
+    }
+    await new Promise((r) => setTimeout(r, 800));
+  }
+  return false;
+}
+
+// Attend la fin réelle du morceau depuis l'état Spotify, mais rend la main
+// `leadMs` AVANT la fin pour lancer la narration suivante sans blanc.
 export async function waitForTrackEnd(
   durationMs: number,
+  spotifyUri?: string,
   leadMs = 0,
 ): Promise<void> {
-  const wait = Math.max(0, durationMs - leadMs);
-  return new Promise((resolve) => setTimeout(resolve, wait));
+  const fallbackDeadline = Date.now() + Math.max(10000, durationMs + 30000);
+  let lastPosition = 0;
+  let stagnantTicks = 0;
+
+  while (Date.now() < fallbackDeadline) {
+    await new Promise((r) => setTimeout(r, 1000));
+    try {
+      await ensureConnected();
+      const st: any = await SpotifyRemote.getPlayerState();
+      const trackDuration = st?.track?.duration || durationMs;
+      const position = Number(st?.playbackPosition || 0);
+      const currentUri = st?.track?.uri;
+
+      if (spotifyUri && currentUri && !sameUri(currentUri, spotifyUri)) {
+        logDebug("track changed externally, on enchaîne");
+        return;
+      }
+
+      if (!st?.isPaused) {
+        stagnantTicks = position <= lastPosition + 250 ? stagnantTicks + 1 : 0;
+        lastPosition = position;
+      }
+
+      const remaining = trackDuration - position;
+      if (remaining <= leadMs + 750) {
+        logDebug(`track end: remaining=${Math.max(0, remaining)}ms`);
+        return;
+      }
+
+      // Si Spotify dit "pas en pause" mais que la position ne bouge plus, on
+      // ne bloque pas l'émission indéfiniment.
+      if (!st?.isPaused && stagnantTicks >= 8) {
+        logDebug("⚠️ position figée, on enchaîne");
+        return;
+      }
+    } catch (e) {
+      logError("waitForTrackEnd", e);
+    }
+  }
+
+  logDebug("⚠️ fin morceau: timeout fallback, on enchaîne");
 }
 
 export function disconnectSpotify(): void {

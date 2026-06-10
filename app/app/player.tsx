@@ -124,7 +124,11 @@ export default function PlayerScreen() {
       await connectSpotify();
       setPhase("music");
       await playTrack(seedTrack.spotifyUri);
-      await waitForTrackEnd(seedTrack.duration, NARRATION_LEAD_MS);
+      await waitForTrackEnd(
+        seedTrack.duration,
+        seedTrack.spotifyUri,
+        NARRATION_LEAD_MS,
+      );
       if (stopped.current) return;
 
       setPhase("preparing");
@@ -194,6 +198,7 @@ export default function PlayerScreen() {
     // On anticipe la fin seulement s'il reste une narration à enchaîner.
     await waitForTrackEnd(
       data.tracks[index].duration,
+      data.tracks[index].spotifyUri,
       hasNext ? NARRATION_LEAD_MS : 0,
     );
     if (stopped.current) return;

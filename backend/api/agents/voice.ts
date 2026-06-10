@@ -1,4 +1,5 @@
 import axios from "axios";
+import { createHash } from "crypto";
 import { getCachedTts, setCachedTts } from "../../lib/cache/matter";
 
 // Deux fournisseurs TTS :
@@ -7,21 +8,28 @@ import { getCachedTts, setCachedTts } from "../../lib/cache/matter";
 //  - OPENAI = secours automatique (gpt-4o-mini-tts / ash) : si Gemini est
 //    indisponible (quota du tier gratuit, erreur réseau), on ne casse jamais
 //    une émission, on bascule dessus en silence.
-// Le cache TTS est taggé par fournisseur+modèle+voix → changer de voix ne
-// resert jamais un vieil audio.
+// Le cache TTS est taggé par fournisseur+modèle+voix+style → changer la voix
+// ou le débit ne resert jamais un vieil audio.
 
 // ---- Gemini (principal) ---------------------------------------------------
 const GEMINI_MODEL = process.env.GEMINI_TTS_MODEL || "gemini-2.5-flash-preview-tts";
 const GEMINI_VOICE = process.env.GEMINI_TTS_VOICE || "Gacrux";
 // Direction de jeu en langage naturel : Gemini la SUIT. C'est ce qui rend la
 // voix vivante au lieu de « récitée » — exactement le reproche fait à OpenAI.
-const GEMINI_STYLE =
+const DEFAULT_GEMINI_STYLE =
   "Dis ce texte comme un disquaire passionné à la radio, façon FIP ou Nova : " +
   "voix chaude, posée, complice, vivante et naturelle, comme si tu confiais " +
-  "une histoire à une seule personne autour d'un verre. Débit tranquille, des " +
-  "respirations naturelles, jamais récité, jamais monocorde.";
+  "une histoire à une seule personne autour d'un verre. Débit naturel et allant, " +
+  "radio fluide, sans lenteur cérémonieuse ; garde des respirations naturelles, " +
+  "mais ne traîne pas les fins de phrase. Jamais récité, jamais monocorde.";
+const GEMINI_STYLE = process.env.GEMINI_TTS_STYLE || DEFAULT_GEMINI_STYLE;
 
-const geminiTag = () => `gemini:${GEMINI_MODEL}:${GEMINI_VOICE}`;
+function shortHash(value: string): string {
+  return createHash("sha1").update(value).digest("hex").slice(0, 10);
+}
+
+const geminiTag = () =>
+  `gemini:${GEMINI_MODEL}:${GEMINI_VOICE}:style-${shortHash(GEMINI_STYLE)}`;
 
 async function synthGemini(text: string): Promise<Buffer> {
   const apiKey = process.env.GEMINI_API_KEY!;
@@ -75,12 +83,17 @@ function pcmToWav(
 // ---- OpenAI (secours) -----------------------------------------------------
 const OPENAI_MODEL = process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts";
 const OPENAI_VOICE = process.env.OPENAI_TTS_VOICE || "ash";
-const OPENAI_INSTRUCTIONS =
+const DEFAULT_OPENAI_INSTRUCTIONS =
   "Voix chaude de disquaire radio, à la FIP ou Nova. Posée, complice, " +
   "naturelle, comme si tu confiais une histoire à une seule personne autour " +
-  "d'un verre. Débit tranquille, jamais récité.";
+  "d'un verre. Débit naturel et allant, radio fluide, jamais récité.";
+const OPENAI_INSTRUCTIONS =
+  process.env.OPENAI_TTS_INSTRUCTIONS || DEFAULT_OPENAI_INSTRUCTIONS;
 
-const openaiTag = () => `openai:${OPENAI_MODEL}:${OPENAI_VOICE}`;
+const openaiTag = () =>
+  `openai:${OPENAI_MODEL}:${OPENAI_VOICE}:style-${shortHash(
+    OPENAI_INSTRUCTIONS,
+  )}`;
 
 async function synthOpenAI(text: string): Promise<Buffer> {
   const response = await axios.post(
