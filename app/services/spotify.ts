@@ -33,6 +33,11 @@ const spotifyConfig: ApiConfig = {
 
 let accessToken: string | null = null;
 let remoteWakeInFlight: Promise<void> | null = null;
+// Device verrouillé pour la session : une fois qu'un titre a joué sur le
+// téléphone, on y reste. Sinon, dans le creux entre deux morceaux (état Web
+// API à 204), la sélection pouvait sauter sur une enceinte Connect persistante
+// (le salon) — ce qui casse aussi le ducking, local à la sortie du téléphone.
+let sessionDeviceId: string | null = null;
 let localPlayback:
   | {
       uri: string;
@@ -166,14 +171,19 @@ async function getPlaybackState(): Promise<WebPlaybackState | null> {
 }
 
 async function getActiveDeviceId(): Promise<string | undefined> {
+  // 1) Un titre joue (ou un device est courant) : c'est lui, on le verrouille.
   const state = await getPlaybackState().catch(() => null);
   if (state?.device?.id && !state.device.is_restricted) {
+    sessionDeviceId = state.device.id;
     logDebug(
       `device: ${state.device.name || "?"} (${state.device.type || "?"})`,
     );
     return state.device.id;
   }
 
+  // 2) Creux entre deux titres (état à 204) : on liste les devices et on RESTE
+  //    sur celui de la session. Sinon la Web API saute sur la première enceinte
+  //    Connect dispo (le salon). Ordre : session > actif > téléphone > 1er.
   return spotifyRequest("web devices", async (t) => {
     const res = await axios.get(`${SPOTIFY_API}/me/player/devices`, {
       headers: { Authorization: `Bearer ${t}` },
@@ -186,10 +196,14 @@ async function getActiveDeviceId(): Promise<string | undefined> {
       name?: string;
       type?: string;
     }>;
+    const usable = devices.filter((d) => d.id && !d.is_restricted);
     const device =
-      devices.find((d) => d.is_active && !d.is_restricted) ||
-      devices.find((d) => !d.is_restricted);
+      usable.find((d) => d.id === sessionDeviceId) ||
+      usable.find((d) => d.is_active) ||
+      usable.find((d) => d.type === "Smartphone") ||
+      usable[0];
     if (device?.id) {
+      sessionDeviceId = device.id;
       logDebug(`device: ${device.name || "?"} (${device.type || "?"})`);
     } else {
       logDebug("⚠️ aucun device Spotify Connect disponible");
@@ -282,6 +296,10 @@ async function waitForExpectedTrack(spotifyUri: string): Promise<boolean> {
         `web state: "${st?.item?.name ?? "?"}" playing=${st?.is_playing} pos=${st?.progress_ms}`,
       );
       if (sameUri(uri, spotifyUri) && st?.is_playing) {
+        // Le device qui a confirmé la lecture devient celui de la session.
+        if (st.device?.id && !st.device.is_restricted) {
+          sessionDeviceId = st.device.id;
+        }
         markLocalPlaying(spotifyUri, Number(st.progress_ms || 0));
         return true;
       }
