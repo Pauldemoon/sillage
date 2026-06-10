@@ -32,6 +32,13 @@ const spotifyConfig: ApiConfig = {
 
 let accessToken: string | null = null;
 let remoteWakeInFlight: Promise<void> | null = null;
+let localPlayback:
+  | {
+      uri: string;
+      startedAtMs: number;
+      pausedAtMs: number | null;
+    }
+  | null = null;
 
 interface WebPlaybackState {
   is_playing?: boolean;
@@ -60,6 +67,34 @@ function statusOf(e: unknown): number | undefined {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function markLocalPlaying(uri: string, positionMs = 0): void {
+  localPlayback = {
+    uri,
+    startedAtMs: Date.now() - Math.max(0, positionMs),
+    pausedAtMs: null,
+  };
+}
+
+function markLocalPaused(): void {
+  if (localPlayback && !localPlayback.pausedAtMs) {
+    localPlayback.pausedAtMs = Date.now();
+  }
+}
+
+function markLocalResumed(): void {
+  if (localPlayback?.pausedAtMs) {
+    localPlayback.startedAtMs += Date.now() - localPlayback.pausedAtMs;
+    localPlayback.pausedAtMs = null;
+  }
+}
+
+function localPositionMs(uri?: string): number | null {
+  if (!localPlayback) return null;
+  if (uri && !sameUri(localPlayback.uri, uri)) return null;
+  const now = localPlayback.pausedAtMs || Date.now();
+  return Math.max(0, now - localPlayback.startedAtMs);
 }
 
 async function authorize(label: string): Promise<string> {
@@ -165,6 +200,9 @@ async function webPlay(spotifyUri: string): Promise<void> {
       },
     );
   });
+  // Si l'état Web API devient momentanément inaccessible juste après le play,
+  // cette horloge locale évite de bloquer l'émission jusqu'au timeout long.
+  markLocalPlaying(spotifyUri, 0);
 }
 
 export async function connectSpotify(): Promise<void> {
@@ -209,6 +247,7 @@ export async function pauseTrack(): Promise<void> {
       { headers: { Authorization: `Bearer ${t}` }, timeout: 10000 },
     );
   });
+  markLocalPaused();
 }
 
 export async function resumeTrack(): Promise<void> {
@@ -219,6 +258,7 @@ export async function resumeTrack(): Promise<void> {
       { headers: { Authorization: `Bearer ${t}` }, timeout: 10000 },
     );
   });
+  markLocalResumed();
 }
 
 async function waitForExpectedTrack(spotifyUri: string): Promise<boolean> {
@@ -230,7 +270,10 @@ async function waitForExpectedTrack(spotifyUri: string): Promise<boolean> {
       logDebug(
         `web state: "${st?.item?.name ?? "?"}" playing=${st?.is_playing} pos=${st?.progress_ms}`,
       );
-      if (sameUri(uri, spotifyUri) && st?.is_playing) return true;
+      if (sameUri(uri, spotifyUri) && st?.is_playing) {
+        markLocalPlaying(spotifyUri, Number(st.progress_ms || 0));
+        return true;
+      }
     } catch (e) {
       logError("web state", e);
     }
@@ -249,11 +292,25 @@ export async function waitForTrackEnd(
   const fallbackDeadline = Date.now() + Math.max(10000, durationMs + 30000);
   let lastPosition = 0;
   let stagnantTicks = 0;
+  let webFailures = 0;
 
   while (Date.now() < fallbackDeadline) {
     await sleep(1200);
+    const localPosition = localPositionMs(spotifyUri);
+    if (localPosition !== null) {
+      const localRemaining = durationMs - localPosition;
+      if (webFailures >= 2) {
+        logDebug(`clock fallback: remaining=${Math.max(0, localRemaining)}ms`);
+      }
+      if (localRemaining <= leadMs + 1200) {
+        logDebug(`track end clock: remaining=${Math.max(0, localRemaining)}ms`);
+        return;
+      }
+    }
+
     try {
       const st = await getPlaybackState();
+      webFailures = 0;
       const trackDuration = st?.item?.duration_ms || durationMs;
       const position = Number(st?.progress_ms || 0);
       const currentUri = st?.item?.uri;
@@ -264,6 +321,7 @@ export async function waitForTrackEnd(
       }
 
       if (st?.is_playing) {
+        if (currentUri) markLocalPlaying(currentUri, position);
         stagnantTicks = position <= lastPosition + 250 ? stagnantTicks + 1 : 0;
         lastPosition = position;
       }
@@ -279,6 +337,7 @@ export async function waitForTrackEnd(
         return;
       }
     } catch (e) {
+      webFailures += 1;
       logError("waitForTrackEnd web", e);
       if (statusOf(e) === 401) accessToken = null;
     }
