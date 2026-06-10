@@ -28,11 +28,26 @@ const spotifyConfig: ApiConfig = {
 };
 
 let connected = false;
+let listenersInstalled = false;
 // On garde le dernier token pour pouvoir reconnecter l'App Remote sans
 // relancer tout le flux OAuth : Spotify coupe la socket dès que la lecture
 // s'arrête (fin de file), ce qui faisait échouer le morceau suivant
 // ("player is not ready").
 let lastAccessToken: string | null = null;
+let reconnecting: Promise<void> | null = null;
+
+function installRemoteListeners(): void {
+  if (listenersInstalled) return;
+  listenersInstalled = true;
+  SpotifyRemote.on("remoteDisconnected", () => {
+    connected = false;
+    logDebug("remoteDisconnected");
+  });
+  SpotifyRemote.on("remoteConnected", () => {
+    connected = true;
+    logDebug("remoteConnected");
+  });
+}
 
 // L'App Remote refuse souvent la socket JUSTE après l'autorisation, le temps
 // que l'app Spotify se réveille et accepte le transport ("Connection refused" /
@@ -44,6 +59,7 @@ async function connectWithRetry(token: string, label: string): Promise<void> {
   for (let attempt = 1; attempt <= MAX; attempt++) {
     try {
       await SpotifyRemote.connect(token);
+      connected = true;
       logDebug(`${label} OK ✅ (tentative ${attempt})`);
       return;
     } catch (e) {
@@ -59,19 +75,61 @@ async function connectWithRetry(token: string, label: string): Promise<void> {
 }
 
 export async function connectSpotify(): Promise<void> {
-  if (connected) return;
-  logDebug("connectSpotify: authorize…");
+  installRemoteListeners();
+  if (connected) {
+    try {
+      if (await SpotifyRemote.isConnectedAsync()) return;
+    } catch {
+      // on retombe sur une autorisation fraîche
+    }
+    connected = false;
+  }
+  await authorizeAndConnect("connectSpotify");
+}
+
+async function authorizeAndConnect(label: string): Promise<void> {
+  logDebug(`${label}: authorize…`);
   const session = await SpotifyAuth.authorize(spotifyConfig);
   lastAccessToken = session.accessToken;
   logDebug(`authorize OK (token ${session.accessToken?.slice(0, 6)}…), connect…`);
   await connectWithRetry(session.accessToken, "connect");
-  connected = true;
+}
+
+async function forceReconnect(label: string): Promise<void> {
+  if (reconnecting) return reconnecting;
+  reconnecting = (async () => {
+    connected = false;
+    try {
+      await SpotifyRemote.disconnect();
+    } catch {
+      // déjà déconnecté
+    }
+    if (lastAccessToken) {
+      try {
+        logDebug(`${label}: reconnect token…`);
+        await connectWithRetry(lastAccessToken, "reconnect");
+        return;
+      } catch (e) {
+        logError(`${label}: token reconnect failed`, e);
+      }
+    }
+    await authorizeAndConnect(label);
+  })().finally(() => {
+    reconnecting = null;
+  });
+  return reconnecting;
 }
 
 // Garantit une App Remote vivante avant toute commande de lecture. Si la
 // socket est tombée (fin de morceau, app Spotify mise en veille...), on la
 // rouvre avec le token déjà obtenu.
-async function ensureConnected(): Promise<void> {
+async function ensureConnected(forceFreshAuth = false): Promise<void> {
+  installRemoteListeners();
+  if (forceFreshAuth) {
+    await authorizeAndConnect("fresh reconnect");
+    return;
+  }
+
   let isConn = false;
   try {
     isConn = await SpotifyRemote.isConnectedAsync();
@@ -79,31 +137,44 @@ async function ensureConnected(): Promise<void> {
     logError("isConnectedAsync", e);
   }
   logDebug(`ensureConnected: isConnected=${isConn}`);
-  if (isConn) return;
-  if (lastAccessToken) {
-    logDebug("reconnect…");
-    await connectWithRetry(lastAccessToken, "reconnect");
+  if (isConn) {
     connected = true;
+    return;
+  }
+  if (lastAccessToken) {
+    await forceReconnect("ensureConnected");
   } else {
-    logDebug("⚠️ pas de token pour reconnect");
+    await authorizeAndConnect("ensureConnected");
   }
 }
 
 export async function playTrack(spotifyUri: string): Promise<void> {
-  await ensureConnected();
-  logDebug(`playUri ${spotifyUri.slice(0, 28)}…`);
-  await SpotifyRemote.playUri(spotifyUri);
+  let lastError: unknown = null;
 
-  // Spotify peut accepter la commande avant d'avoir réellement basculé de
-  // morceau. On attend le bon URI, sinon l'enchaînement se cale sur l'ancien
-  // titre et la suite part de travers.
-  const started = await waitForExpectedTrack(spotifyUri);
-  if (!started) {
-    logDebug("⚠️ playUri non confirmé, nouvelle tentative…");
-    await ensureConnected();
-    await SpotifyRemote.playUri(spotifyUri);
-    await waitForExpectedTrack(spotifyUri);
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      await ensureConnected(attempt === 3);
+      logDebug(`playUri ${spotifyUri.slice(0, 28)}… tentative ${attempt}`);
+      await SpotifyRemote.playUri(spotifyUri);
+
+      // Spotify peut accepter la commande avant d'avoir réellement basculé de
+      // morceau. On attend le bon URI, sinon l'enchaînement se cale sur
+      // l'ancien titre et la suite part de travers.
+      if (await waitForExpectedTrack(spotifyUri)) return;
+
+      lastError = new Error("Spotify n'a pas confirmé le morceau demandé");
+      logDebug("⚠️ playUri non confirmé");
+    } catch (e) {
+      lastError = e;
+      logError(`playUri tentative ${attempt}`, e);
+    }
+
+    await forceReconnect(`playUri retry ${attempt}`);
   }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Lecture Spotify impossible");
 }
 
 export async function pauseTrack(): Promise<void> {
@@ -112,7 +183,13 @@ export async function pauseTrack(): Promise<void> {
 
 export async function resumeTrack(): Promise<void> {
   await ensureConnected();
-  await SpotifyRemote.resume();
+  try {
+    await SpotifyRemote.resume();
+  } catch (e) {
+    logError("resume", e);
+    await forceReconnect("resume");
+    await SpotifyRemote.resume();
+  }
 }
 
 function sameUri(a?: string, b?: string): boolean {
