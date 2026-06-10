@@ -76,11 +76,15 @@ export async function generateEmission(
     res = await axios.post(
       `${BACKEND}/api/generate`,
       { title, artist, memory },
-      // La génération prend ~50-75 s. Sans timeout explicite, React Native
-      // applique un plafond ~60 s sur la requête → "Network Error". On fixe
-      // 180 s pour laisser la génération aller au bout (le backend stream un
-      // keep-alive en plus, ceinture + bretelles).
-      { timeout: 180000 },
+      // La génération NEUVE est désormais SÉQUENTIELLE (narrations qui se
+      // lisent l'une l'autre + relecture d'épisode) : ~110-160 s, jusqu'à
+      // ~200 s sur une graine lourde. On laisse 300 s pour ne jamais couper
+      // alors que le serveur travaille encore (sinon axios abandonne et
+      // l'app croit le backend "injoignable"). Le backend stream un espace
+      // toutes les 10 s pour garder la connexion vivante pendant ce temps.
+      // La génération tourne EN FOND pendant que le morceau de départ joue,
+      // donc cette durée ne se voit pas (sauf graine très courte).
+      { timeout: 300000 },
     );
   } catch (e: any) {
     // Pas de réponse du tout (DNS, connexion refusée, hôte injoignable) :
