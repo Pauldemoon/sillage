@@ -12,6 +12,7 @@ import {
   type TrackDossier,
 } from "./agents/editor";
 import { planBroadcast } from "./agents/producer";
+import { planPacing } from "../lib/editorial/pacing";
 import { researchArtist, type SourcedFact } from "../lib/research";
 import { uploadNarrationAudio } from "../lib/storage";
 import { findBestTrackMatch, type SpotifyTrack } from "../lib/spotify";
@@ -579,10 +580,15 @@ async function runHandler(req: VercelRequest, res: VercelResponse) {
     // seule fois par voyage neuf (Layer 3 ressert les suivants).
     // La vérification factuelle, elle, reste hors du chemin critique : elle
     // ne corrige que des détails et ne nourrit pas la narration suivante.
+    // L'horloge de l'émission : un rôle et un budget de mots par narration
+    // (lancement / lien / loupe / sortie) — le rythme d'une vraie radio,
+    // pas une suite de monologues de même taille.
+    const pacingPlan = planPacing(curatedTracks.length - narrationStartIndex);
     const narrationTexts = Array<string>(curatedTracks.length).fill("");
     const previousDrafts: string[] = [];
     const verifications: Promise<void>[] = [];
     for (let i = narrationStartIndex; i < curatedTracks.length; i++) {
+      const pacingSlot = pacingPlan[i - narrationStartIndex];
       const draft = await generateNarration(
         curatedTracks,
         angle,
@@ -594,6 +600,7 @@ async function runHandler(req: VercelRequest, res: VercelResponse) {
           previousTrackFacts: dossiers[i - 1]?.facts,
         },
         [...previousDrafts],
+        pacingSlot,
       );
       previousDrafts.push(draft);
 
@@ -605,7 +612,10 @@ async function runHandler(req: VercelRequest, res: VercelResponse) {
         .filter(Boolean)
         .join("\n\n---\n\n");
       verifications.push(
-        verifyNarration(draft, verificationFacts).then((verified) => {
+        verifyNarration(draft, verificationFacts, {
+          min: pacingSlot.minWords,
+          max: pacingSlot.maxWords,
+        }).then((verified) => {
           narrationTexts[i] = verified;
         }),
       );
@@ -619,7 +629,12 @@ async function runHandler(req: VercelRequest, res: VercelResponse) {
     const trackLabels = curatedTracks.map(
       (track) => `${track.title} — ${track.artist}`,
     );
-    const reviewedTexts = await reviewEpisode(angle, trackLabels, narrationTexts);
+    const reviewedTexts = await reviewEpisode(
+      angle,
+      trackLabels,
+      narrationTexts,
+      pacingPlan,
+    );
     for (let i = 0; i < narrationTexts.length; i++) {
       narrationTexts[i] = reviewedTexts[i];
     }

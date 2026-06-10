@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { FRENCH_STYLE_RULES } from "../../lib/editorial/french";
+import type { PacingSlot } from "../../lib/editorial/pacing";
 
 const getClient = () =>
   new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -16,10 +17,12 @@ const SYSTEM_PROMPT = `Tu es le réalisateur final d'une émission de radio musi
 3) FIL ROUGE — l'épisode avance : chaque narration apporte du neuf vers l'angle, aucune ne refait le chemin d'une précédente.
 4) CLOSERS — chaque narration finit concret : une image, une révélation, ou une consigne d'écoute sur le morceau qui arrive. Jamais un slogan abstrait (« la musique n'a jamais été aussi vivante »). Si un closer éditorialise dans le vide, remplace-le par du concret pris dans la narration elle-même.
 
+5) RYTHME — chaque narration a un RÔLE et un budget de mots (donnés dans le message) : lancement, lien (transition courte voulue), loupe (la grande histoire), sortie. Tu fais respecter le budget : un lien qui déborde se coupe à son fait le plus fort ; tu ne rallonges JAMAIS une narration courte — le contraste court/long est le rythme voulu de l'émission.
+
 RÈGLES DURES :
 - Tu n'ajoutes AUCUN fait, nom, date, chiffre ou citation qui ne soit déjà dans les narrations fournies. Tu réorganises, tu varies, tu coupes — tu n'inventes pas.
 - Tu modifies le MOINS possible : une narration sans défaut d'ensemble est rendue TELLE QUELLE, au caractère près.
-- Chaque narration vise environ 130 à 160 mots. Tu ne la raccourcis pas pour gagner des mots, MAIS si elle tourne en rond (une idée redite, une conclusion qui répète le récit), tu coupes le passage redondant. Elle reste orale, au tutoiement, et sa dernière phrase doit pouvoir précéder directement le morceau qui arrive.
+- Tu ne raccourcis pas pour gagner des mots, MAIS si une narration tourne en rond (une idée redite, une conclusion qui répète le récit) ou déborde son budget, tu coupes le passage redondant. Elle reste orale, au tutoiement, et sa dernière phrase doit pouvoir précéder directement le morceau qui arrive.
 - Même nombre de narrations, même ordre.
 
 ${FRENCH_STYLE_RULES}
@@ -30,10 +33,12 @@ export async function reviewEpisode(
   angle: string,
   trackLabels: string[],
   narrations: string[],
+  pacing: PacingSlot[] = [],
 ): Promise<string[]> {
   // Seules les positions qui ont un texte sont relues ; les emplacements
   // vides (ex. pas de narration avant la graine en seed-first) sont
   // préservés tels quels. Moins de deux textes = rien à comparer.
+  // `pacing` suit l'ordre des narrations remplies (pacing[k] = filled[k]).
   const filled = narrations
     .map((text, index) => ({ text, index }))
     .filter((item) => item.text.trim());
@@ -54,10 +59,13 @@ ${trackLabels.map((label, i) => `${i + 1}. ${label}`).join("\n")}
 
 Narrations de l'épisode, dans l'ordre (chacune précède le morceau indiqué) :
 ${filled
-  .map(
-    (item, k) =>
-      `[Narration ${k + 1} — avant « ${trackLabels[item.index] ?? "?"} »]\n${item.text}`,
-  )
+  .map((item, k) => {
+    const slot = pacing[k];
+    const roleNote = slot
+      ? ` — rôle ${slot.role}, budget ${slot.minWords}-${slot.maxWords} mots`
+      : "";
+    return `[Narration ${k + 1} — avant « ${trackLabels[item.index] ?? "?"} »${roleNote}]\n${item.text}`;
+  })
   .join("\n\n")}
 
 Renvoie le JSON.`,

@@ -28,8 +28,8 @@ Règles de prudence (faits) :
 - Ne supprime pas un fait culturel large et bien établi juste parce qu'il n'est pas littéralement dans les sources. Cible les affirmations précises, attribuées, risquées.
 - Une image, une appréciation de goût, une métaphore ("ça te prend aux tripes") n'est PAS un fait : tu la laisses.
 - Tu préserves le ton, le rythme, le tutoiement, les images. Tu touches le moins possible AUX FAITS.
-- Tu ne rallonges jamais. Tu peux raccourcir si tu retires un passage douteux.
-- Cible de longueur : environ 130 à 160 mots. Tu ne coupes une phrase QUE si elle est douteuse factuellement OU si elle répète une idée déjà dite (radotage) ; jamais juste pour raccourcir un texte propre. Si elle dépasse ~180 mots, retire en priorité les phrases qui tournent en rond.
+- Tu ne rallonges JAMAIS — même si la narration est courte : les longueurs varient PAR CONCEPTION (certaines narrations sont des transitions de 40 mots, d'autres de grands récits). Le budget de mots de la narration t'est donné dans le message.
+- Tu ne coupes une phrase QUE si elle est douteuse factuellement OU si elle répète une idée déjà dite (radotage) ; jamais juste pour raccourcir un texte propre. Si la narration dépasse nettement son budget, retire en priorité les phrases qui tournent en rond.
 
 DEUXIÈME MISSION — LA LANGUE :
 Tu corriges aussi tout ce qui trahit une écriture non native : anglicismes, faux-amis, calques de l'anglais, tics d'écriture automatique, adjectifs creux. Tu remplaces par la formulation française juste, SANS changer le sens ni les faits, SANS rallonger, en gardant l'oralité et le tutoiement. C'est une correction de surface : si la narration est déjà d'un français naturel, tu n'y touches pas.
@@ -41,6 +41,7 @@ Réponds UNIQUEMENT avec la narration corrigée (faits + langue), rien d'autre �
 export async function verifyNarration(
   narration: string,
   facts: string,
+  wordBudget?: { min: number; max: number },
 ): Promise<string> {
   const response = await getClient().messages.create({
     // Haiku suffit ici : c'est de la vérification ANCRÉE (comparer la
@@ -63,7 +64,7 @@ export async function verifyNarration(
         content: `Faits réels sourcés (vérité de référence) :
 ${facts.slice(0, 8000)}
 
-Narration à vérifier :
+Narration à vérifier${wordBudget ? ` (budget : ${wordBudget.min} à ${wordBudget.max} mots — ne rallonge pas)` : ""} :
 ${narration}
 
 Renvoie la narration corrigée.`,

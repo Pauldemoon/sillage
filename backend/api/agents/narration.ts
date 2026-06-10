@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { SpotifyTrack } from "../../lib/spotify";
 import { FRENCH_STYLE_RULES } from "../../lib/editorial/french";
 import { GOLDEN_SET_FEWSHOT } from "../../lib/editorial/golden-set";
+import type { PacingSlot } from "../../lib/editorial/pacing";
 
 const getClient = () =>
   new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -32,14 +33,19 @@ LES FAITS — c'est le plus important :
 
 LA CONSTRUCTION — un arc, pas une liste :
 - Tu racontes UNE histoire qui avance (une chute, une genèse, une bascule, une révélation) — jamais une dictée de noms et de dates.
-- Tu choisis DEUX OU TROIS faits forts, pas dix. Mieux vaut un détail qu'on retient que cinq qu'on oublie. Si tu cites un nom, tu en fais quelque chose ; sinon tu le coupes.
+- Peu de faits, mais forts : un seul pour une transition courte, deux ou trois pour un vrai récit. Mieux vaut un détail qu'on retient que cinq qu'on oublie. Si tu cites un nom, tu en fais quelque chose ; sinon tu le coupes.
 - Le fait qui pique, jamais l'adjectif : montre l'émotion par ce qui s'est passé, ne la commente pas.
 - Une vraie citation crue de l'artiste vaut mieux qu'une paraphrase polie — si elle est dans les faits.
+
+LE RYTHME DE L'ÉMISSION — chaque narration a un RÔLE :
+- Une vraie émission de radio ALTERNE : un lien de quinze secondes, une grande histoire, une sortie. Ce n'est pas une suite de monologues de même taille.
+- Le rôle de TA narration (lancement, lien, loupe ou sortie) et son budget de mots te sont donnés à chaque fois. Tu les respectes À LA LETTRE : un lien court qui déborde casse le rythme de toute l'émission.
+- Court ne veut pas dire sec : même en 40 mots, c'est la voix du disquaire — un fait qui pique, une bascule naturelle, jamais un résumé télégraphique.
 
 LA FLUIDITÉ :
 - Des phrases de longueurs variées. Du rythme. Ça doit se dire à voix haute sans accrocher.
 - Présent de narration de préférence, mais le naturel prime sur la règle.
-- Format : environ 130 à 160 mots. Assez pour raconter une vraie histoire, façon "Very Good Trip", mais sans délayer. Chaque phrase fait avancer ; à la moindre phrase qui n'ajoute rien, tu coupes.
+- Chaque phrase fait avancer ; à la moindre phrase qui n'ajoute rien, tu coupes.
 - NE TOURNE PAS EN ROND : tu dis chaque idée UNE fois. Tu ne reformules pas un fait déjà donné, tu ne reviens pas sur un point pour le redire autrement, tu ne répètes pas en conclusion ce que tu as déjà raconté. Une narration avance en ligne droite, elle ne fait pas de boucle.
 
 LA CHUTE — obligatoirement CONCRÈTE :
@@ -65,6 +71,7 @@ export async function generateNarration(
   index: number,
   facts: NarrationFacts,
   previousNarrations: string[] = [],
+  pacing?: PacingSlot,
 ): Promise<string> {
   const currentTrack = tracks[index];
 
@@ -99,6 +106,7 @@ ${description}
 
 ${context}
 
+${pacing ? `${pacing.brief}\n` : ""}
 Faits globaux de l'émission — à utiliser pour tenir le fil rouge :
 ${facts.emissionFacts.slice(0, 2500)}
 

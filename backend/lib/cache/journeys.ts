@@ -27,7 +27,11 @@ const JOURNEY_TTL_DAYS = 120;
 //                   arrive). Corrige l'off-by-one qui faisait amorcer le titre
 //                   i+1 (deux crans plus loin) et "conclure" avant le dernier
 //                   morceau — d'où le lien faible entre les titres.
-const PIPELINE_VERSION = "v4";
+// v5 (2026-06-10) : horloge d'épisode (lancement / lien court / loupe /
+//                   sortie) — longueurs par rôle au lieu de 4 monologues
+//                   uniformes de 130-160 mots ; sortie avec graine de
+//                   prochain voyage.
+const PIPELINE_VERSION = "v5";
 
 function seedKey(title: string, artist: string): string {
   return `${PIPELINE_VERSION}:${cacheKey(title, artist)}`;
