@@ -13,6 +13,9 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { searchTracks, TrackSuggestion } from "../services/api";
+import { palette, serif, glassShadow, glassShadowSmall } from "../ui/theme";
+import { SilkBackground } from "../ui/silk";
+import { SearchIcon } from "../ui/icons";
 
 export default function SearchScreen() {
   const [query, setQuery] = useState("");
@@ -54,121 +57,134 @@ export default function SearchScreen() {
     });
   }
 
+  const hasResults = results.length > 0 || loading;
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <View style={styles.header}>
-        <Text style={styles.logo}>SILLAGE</Text>
-        <Text style={styles.subtitle}>
-          Cherche un morceau. Écoute une émission.
-        </Text>
-      </View>
+    <View style={styles.container}>
+      <SilkBackground />
+      <KeyboardAvoidingView
+        style={styles.inner}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <View style={[styles.header, hasResults && styles.headerCompact]}>
+          <Text style={styles.logo}>Sillage</Text>
+        </View>
 
-      <View style={styles.searchBox}>
-        <TextInput
-          style={styles.input}
-          placeholder="Rechercher un titre ou un artiste"
-          placeholderTextColor="#444"
-          value={query}
-          onChangeText={setQuery}
-          autoCorrect={false}
-          autoCapitalize="none"
-          returnKeyType="search"
-          autoFocus
+        <View style={[styles.searchBox, glassShadow]}>
+          <SearchIcon size={18} color={palette.sub} />
+          <TextInput
+            style={styles.input}
+            placeholder="Titre, artiste"
+            placeholderTextColor={palette.faint}
+            value={query}
+            onChangeText={setQuery}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            autoFocus
+          />
+          {loading && <ActivityIndicator color={palette.sub} />}
+        </View>
+
+        <FlatList
+          data={results}
+          keyExtractor={(item) => item.id}
+          keyboardShouldPersistTaps="handled"
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[styles.row, glassShadowSmall]}
+              onPress={() => pick(item)}
+              activeOpacity={0.7}
+            >
+              <Image source={{ uri: item.cover }} style={styles.cover} />
+              <View style={styles.rowText}>
+                <Text style={styles.rowTitle} numberOfLines={1}>
+                  {item.title}
+                </Text>
+                <Text style={styles.rowArtist} numberOfLines={1}>
+                  {item.artist}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={
+            query.trim().length >= 2 && !loading ? (
+              <Text style={styles.empty}>Aucun résultat</Text>
+            ) : null
+          }
         />
-        {loading && (
-          <ActivityIndicator style={styles.inlineSpinner} color="#666" />
-        )}
-      </View>
-
-      <FlatList
-        data={results}
-        keyExtractor={(item) => item.id}
-        keyboardShouldPersistTaps="handled"
-        style={styles.list}
-        contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => (
-          <TouchableOpacity style={styles.row} onPress={() => pick(item)}>
-            <Image source={{ uri: item.cover }} style={styles.cover} />
-            <View style={styles.rowText}>
-              <Text style={styles.rowTitle} numberOfLines={1}>
-                {item.title}
-              </Text>
-              <Text style={styles.rowArtist} numberOfLines={1}>
-                {item.artist}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        )}
-        ListEmptyComponent={
-          query.trim().length >= 2 && !loading ? (
-            <Text style={styles.empty}>Aucun résultat</Text>
-          ) : null
-        }
-      />
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0a0a0a",
-    paddingHorizontal: 20,
-    paddingTop: 96,
+    backgroundColor: palette.bg,
+  },
+  inner: {
+    flex: 1,
+    paddingHorizontal: 24,
   },
   header: {
-    marginBottom: 32,
+    alignItems: "center",
+    marginTop: 150,
+    marginBottom: 44,
+  },
+  headerCompact: {
+    marginTop: 84,
+    marginBottom: 28,
   },
   logo: {
-    fontSize: 36,
-    fontWeight: "200",
-    color: "#fff",
-    letterSpacing: 12,
-    textAlign: "center",
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "#555",
-    textAlign: "center",
+    fontFamily: serif,
+    fontSize: 58,
+    color: palette.ink,
     letterSpacing: 1,
+    textShadowColor: "rgba(255, 255, 255, 0.9)",
+    textShadowOffset: { width: 0, height: 1.5 },
+    textShadowRadius: 1,
   },
   searchBox: {
-    justifyContent: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: palette.glass,
+    borderWidth: 1,
+    borderColor: palette.glassBorder,
+    borderRadius: 32,
+    paddingHorizontal: 22,
+    height: 62,
   },
   input: {
-    backgroundColor: "#111",
-    color: "#fff",
-    borderRadius: 12,
-    padding: 18,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: "#222",
-  },
-  inlineSpinner: {
-    position: "absolute",
-    right: 16,
+    flex: 1,
+    fontSize: 17,
+    color: palette.ink,
   },
   list: {
-    marginTop: 8,
+    marginTop: 18,
   },
   listContent: {
-    paddingTop: 8,
+    paddingBottom: 32,
+    gap: 10,
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
-    gap: 12,
+    gap: 14,
+    backgroundColor: "rgba(255, 255, 255, 0.38)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.55)",
+    borderRadius: 20,
+    padding: 10,
   },
   cover: {
-    width: 48,
-    height: 48,
-    borderRadius: 6,
-    backgroundColor: "#1a1a1a",
+    width: 50,
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.4)",
   },
   rowText: {
     flex: 1,
@@ -176,15 +192,15 @@ const styles = StyleSheet.create({
   },
   rowTitle: {
     fontSize: 16,
-    color: "#fff",
-    fontWeight: "500",
+    color: palette.ink,
+    fontWeight: "600",
   },
   rowArtist: {
     fontSize: 13,
-    color: "#666",
+    color: palette.sub,
   },
   empty: {
-    color: "#444",
+    color: palette.faint,
     textAlign: "center",
     marginTop: 32,
     fontSize: 14,

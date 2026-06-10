@@ -25,6 +25,18 @@ import {
   waitForTrackEnd,
   disconnectSpotify,
 } from "../services/spotify";
+import { palette, serif, glassShadow, glassShadowSmall } from "../ui/theme";
+import { SilkBackground } from "../ui/silk";
+import { VoiceOrb } from "../ui/orb";
+import { ProgressBar } from "../ui/progress";
+import {
+  ChevronLeftIcon,
+  DotsIcon,
+  PauseIcon,
+  PlayIcon,
+  SkipBackIcon,
+  SkipForwardIcon,
+} from "../ui/icons";
 
 type Phase =
   | "connecting"
@@ -61,6 +73,7 @@ export default function PlayerScreen() {
   const [trackIndex, setTrackIndex] = useState(0);
   const [phase, setPhase] = useState<Phase>("connecting");
   const [showSources, setShowSources] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [debugLines, setDebugLines] = useState<string[]>([]);
   const isPaused = useRef(false);
@@ -75,6 +88,40 @@ export default function PlayerScreen() {
 
   const tracks = emission?.tracks || (seedTrack ? [seedTrack] : []);
   const track = tracks[trackIndex] || tracks[0];
+
+  // --- Progression locale du morceau (la Web API n'est pas interrogée pour
+  // l'UI : horloge locale, suspendue pendant la pause, remise à zéro quand
+  // le morceau change). Suffisant pour une barre de lecture.
+  const [positionMs, setPositionMs] = useState(0);
+  const anchor = useRef({ base: 0, startedAt: 0, forIndex: -1 });
+
+  useEffect(() => {
+    if (phase === "music") {
+      if (anchor.current.forIndex !== trackIndex) {
+        anchor.current = { base: 0, startedAt: Date.now(), forIndex: trackIndex };
+      } else {
+        anchor.current.startedAt = Date.now();
+      }
+    } else if (phase === "paused") {
+      if (anchor.current.startedAt) {
+        anchor.current.base += Date.now() - anchor.current.startedAt;
+        anchor.current.startedAt = 0;
+      }
+    } else {
+      anchor.current = { base: 0, startedAt: 0, forIndex: -1 };
+      setPositionMs(0);
+    }
+  }, [phase, trackIndex]);
+
+  useEffect(() => {
+    if (phase !== "music") return;
+    const id = setInterval(() => {
+      const a = anchor.current;
+      const pos = a.base + (a.startedAt ? Date.now() - a.startedAt : 0);
+      setPositionMs(Math.min(pos, track?.duration ?? pos));
+    }, 500);
+    return () => clearInterval(id);
+  }, [phase, trackIndex, track?.duration]);
 
   useEffect(() => {
     startEmission();
@@ -226,7 +273,33 @@ export default function PlayerScreen() {
     }
   }
 
-  const debugOverlay = (
+  function goHome() {
+    router.replace("/");
+  }
+
+  const isVoiceLayout =
+    phase === "narration" || phase === "preparing" || phase === "connecting";
+
+  const topBar = (
+    <View style={styles.topBar}>
+      <TouchableOpacity
+        style={[styles.roundBtn, glassShadowSmall]}
+        onPress={goHome}
+        activeOpacity={0.7}
+      >
+        <ChevronLeftIcon size={15} color={palette.ink} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.roundBtn, glassShadowSmall]}
+        onPress={() => setShowDebug((v) => !v)}
+        activeOpacity={0.7}
+      >
+        <DotsIcon size={4.5} color={palette.ink} />
+      </TouchableOpacity>
+    </View>
+  );
+
+  const debugOverlay = showDebug ? (
     <ScrollView style={styles.debugBox} contentContainerStyle={{ padding: 6 }}>
       {debugLines.map((l, i) => (
         <Text key={i} style={styles.debugLine}>
@@ -234,18 +307,23 @@ export default function PlayerScreen() {
         </Text>
       ))}
     </ScrollView>
-  );
+  ) : null;
 
   if (error) {
     return (
       <View style={styles.container}>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity
-          style={styles.restartBtn}
-          onPress={() => router.replace("/")}
-        >
-          <Text style={styles.restartText}>Retour</Text>
-        </TouchableOpacity>
+        <SilkBackground />
+        {topBar}
+        <View style={styles.errorWrap}>
+          <Text style={styles.errorTitle}>Un accroc</Text>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity
+            style={[styles.pillBtn, glassShadow]}
+            onPress={goHome}
+          >
+            <Text style={styles.pillBtnText}>Retour</Text>
+          </TouchableOpacity>
+        </View>
         {debugOverlay}
       </View>
     );
@@ -254,112 +332,155 @@ export default function PlayerScreen() {
   if (!track) {
     return (
       <View style={styles.container}>
-        <Text style={styles.errorText}>Morceau introuvable</Text>
+        <SilkBackground />
+        <View style={styles.errorWrap}>
+          <Text style={styles.errorTitle}>Morceau introuvable</Text>
+        </View>
       </View>
     );
   }
 
+  const controls = (
+    <View style={styles.controls}>
+      <View style={styles.skipBtn}>
+        <SkipBackIcon size={17} color={palette.faint} />
+      </View>
+      <TouchableOpacity
+        style={[
+          styles.playBtn,
+          glassShadow,
+          isVoiceLayout && styles.playBtnDisabled,
+        ]}
+        onPress={phase === "paused" ? handleResume : handlePause}
+        disabled={isVoiceLayout}
+        activeOpacity={0.7}
+      >
+        {phase === "paused" ? (
+          <PlayIcon size={24} color={palette.ink} />
+        ) : (
+          <PauseIcon size={22} color={palette.ink} />
+        )}
+      </TouchableOpacity>
+      <View style={styles.skipBtn}>
+        <SkipForwardIcon size={17} color={palette.faint} />
+      </View>
+    </View>
+  );
+
+  // --- Écran narration : l'orbe qui respire pendant que Charlie parle.
+  if (isVoiceLayout) {
+    return (
+      <View style={styles.container}>
+        <SilkBackground />
+        {topBar}
+        <Text style={styles.logoSmall}>Sillage</Text>
+        <View style={[styles.statusPill, glassShadowSmall]}>
+          <View style={styles.statusDot} />
+          <Text style={styles.statusPillText}>
+            {phase === "narration" ? "EN NARRATION" : "PRÉPARATION"}
+          </Text>
+        </View>
+
+        <View style={styles.orbWrap}>
+          <VoiceOrb size={246} active={phase === "narration"} />
+        </View>
+
+        <Text style={styles.emissionTitle} numberOfLines={2}>
+          {emission?.angle || "Le voyage se prépare"}
+        </Text>
+        <Text style={styles.emissionSub}>
+          {phase === "narration"
+            ? "La voix raconte"
+            : phase === "preparing"
+              ? "Sillage termine l'émission"
+              : "Connexion Spotify"}
+        </Text>
+
+        {phase === "narration" && emission?.narrations[trackIndex] ? (
+          <ScrollView style={styles.narrationBox}>
+            <Text style={styles.narrationText}>
+              {emission.narrations[trackIndex]}
+            </Text>
+          </ScrollView>
+        ) : (
+          <View style={styles.narrationBox} />
+        )}
+
+        <View style={styles.bottomArea}>
+          <ProgressBar
+            positionMs={trackIndex}
+            durationMs={Math.max(tracks.length - 1, 1)}
+            showTimes={false}
+          />
+          {controls}
+        </View>
+        {debugOverlay}
+      </View>
+    );
+  }
+
+  // --- Écran musique : la carte de verre avec la pochette.
   return (
     <View style={styles.container}>
-      {/* Angle */}
-      <Text style={styles.angle}>
-        {(emission?.angle || "Sillage prépare le voyage").toUpperCase()}
-      </Text>
+      <SilkBackground />
+      {topBar}
 
-      {/* Cover */}
-      <Image source={{ uri: track.cover }} style={styles.cover} />
+      <View style={[styles.coverCard, glassShadow]}>
+        <Image source={{ uri: track.cover }} style={styles.cover} />
+      </View>
 
-      {/* Infos morceau */}
       <View style={styles.trackInfo}>
-        <Text style={styles.trackTitle}>{track.title}</Text>
-        <Text style={styles.trackArtist}>{track.artist}</Text>
+        <Text style={styles.trackTitle} numberOfLines={2}>
+          {track.title}
+        </Text>
+        <Text style={styles.trackArtist} numberOfLines={1}>
+          {track.artist}
+        </Text>
       </View>
 
-      {/* État de lecture */}
-      <View style={styles.phaseRow}>
-        {phase === "connecting" && (
-          <Text style={styles.phaseText}>Connexion Spotify…</Text>
-        )}
-        {phase === "preparing" && (
-          <Text style={styles.phaseText}>Sillage termine l'émission…</Text>
-        )}
-        {phase === "narration" && (
-          <Text style={styles.phaseText}>● Narration en cours</Text>
-        )}
-        {phase === "music" && (
-          <TouchableOpacity onPress={handlePause}>
-            <Text style={styles.phaseText}>
-              ♫ {track.title} — appuie pour pause
-            </Text>
-          </TouchableOpacity>
-        )}
-        {phase === "paused" && (
-          <TouchableOpacity onPress={handleResume}>
-            <Text style={styles.phaseText}>
-              ⏸ Pause — appuie pour reprendre
-            </Text>
-          </TouchableOpacity>
-        )}
-        {phase === "done" && (
+      <View style={styles.bottomArea}>
+        <ProgressBar
+          positionMs={positionMs}
+          durationMs={track.duration || 0}
+          showTimes
+        />
+
+        {phase === "done" ? (
           <TouchableOpacity
-            style={styles.restartBtn}
-            onPress={() => router.replace("/")}
+            style={[styles.pillBtn, glassShadow]}
+            onPress={goHome}
           >
-            <Text style={styles.restartText}>Nouvelle émission →</Text>
+            <Text style={styles.pillBtnText}>Nouveau voyage</Text>
           </TouchableOpacity>
+        ) : (
+          controls
+        )}
+
+        {(track.sources?.length ?? 0) > 0 && (
+          <>
+            <TouchableOpacity
+              onPress={() => setShowSources(!showSources)}
+              style={styles.sourcesToggle}
+            >
+              <Text style={styles.sourcesLabel}>
+                {showSources ? "Masquer les sources" : "Sources"}
+              </Text>
+            </TouchableOpacity>
+            {showSources && (
+              <View style={styles.sourcesList}>
+                {track.sources.map((s, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    onPress={() => Linking.openURL(s.url)}
+                  >
+                    <Text style={styles.sourceLink}>↗ {s.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </>
         )}
       </View>
-
-      {/* Narration text */}
-      {phase === "narration" && emission && (
-        <ScrollView style={styles.narrationBox}>
-          <Text style={styles.narrationText}>
-            {emission.narrations[trackIndex]}
-          </Text>
-        </ScrollView>
-      )}
-
-      {/* Progression */}
-      <View style={styles.progress}>
-        {tracks.map((_, i) => (
-          <View
-            key={i}
-            style={[
-              styles.dot,
-              i === trackIndex && styles.dotActive,
-              i < trackIndex && styles.dotDone,
-            ]}
-          />
-        ))}
-      </View>
-
-      {/* Sources — only when the current track actually has any */}
-      {(track.sources?.length ?? 0) > 0 && (
-        <>
-          <TouchableOpacity
-            style={styles.sourcesToggle}
-            onPress={() => setShowSources(!showSources)}
-          >
-            <Text style={styles.sourcesLabel}>
-              {showSources ? "Masquer les sources" : "Voir les sources"}
-            </Text>
-          </TouchableOpacity>
-
-          {showSources && (
-            <View style={styles.sourcesList}>
-              {track.sources.map((s, i) => (
-                <TouchableOpacity
-                  key={i}
-                  onPress={() => Linking.openURL(s.url)}
-                >
-                  <Text style={styles.sourceLink}>↗ {s.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </>
-      )}
-
       {debugOverlay}
     </View>
   );
@@ -368,81 +489,177 @@ export default function PlayerScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0a0a0a",
-    padding: 24,
-    paddingTop: 56,
+    backgroundColor: palette.bg,
+    paddingHorizontal: 26,
     alignItems: "center",
-    gap: 16,
   },
-  angle: {
-    fontSize: 11,
-    color: "#555",
-    letterSpacing: 3,
-    textAlign: "center",
+  topBar: {
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 62,
+    marginBottom: 8,
+  },
+  roundBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: palette.glass,
+    borderWidth: 1,
+    borderColor: palette.glassBorder,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // — écran musique
+  coverCard: {
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 34,
+    backgroundColor: palette.glass,
+    borderWidth: 1,
+    borderColor: palette.glassBorder,
   },
   cover: {
-    width: 240,
-    height: 240,
-    borderRadius: 12,
+    width: 282,
+    height: 282,
+    borderRadius: 24,
+    backgroundColor: "rgba(255,255,255,0.4)",
   },
   trackInfo: {
     alignItems: "center",
-    gap: 4,
+    gap: 6,
+    marginTop: 30,
+    paddingHorizontal: 10,
   },
   trackTitle: {
-    fontSize: 20,
-    color: "#fff",
-    fontWeight: "600",
+    fontFamily: serif,
+    fontSize: 32,
+    color: palette.ink,
     textAlign: "center",
   },
   trackArtist: {
-    fontSize: 15,
-    color: "#666",
+    fontSize: 16,
+    color: palette.sub,
     textAlign: "center",
   },
-  phaseRow: {
-    height: 40,
-    justifyContent: "center",
+
+  // — écran narration
+  logoSmall: {
+    fontFamily: serif,
+    fontSize: 40,
+    color: palette.ink,
+    marginTop: -46,
+    textShadowColor: "rgba(255,255,255,0.9)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
+  },
+  statusPill: {
+    flexDirection: "row",
     alignItems: "center",
+    gap: 8,
+    backgroundColor: palette.glass,
+    borderWidth: 1,
+    borderColor: palette.glassBorder,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    marginTop: 12,
   },
-  phaseText: {
-    fontSize: 14,
-    color: "#aaa",
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: palette.gold,
+  },
+  statusPillText: {
+    fontSize: 11,
+    letterSpacing: 2.4,
+    color: palette.sub,
+  },
+  orbWrap: {
+    marginTop: 28,
+    marginBottom: 26,
+  },
+  emissionTitle: {
+    fontFamily: serif,
+    fontSize: 30,
+    color: palette.ink,
     textAlign: "center",
+    paddingHorizontal: 8,
+  },
+  emissionSub: {
+    fontSize: 15,
+    color: palette.sub,
+    marginTop: 6,
   },
   narrationBox: {
-    maxHeight: 100,
+    maxHeight: 84,
     width: "100%",
+    marginTop: 14,
   },
   narrationText: {
     fontSize: 13,
-    color: "#555",
+    color: palette.faint,
     lineHeight: 20,
     textAlign: "center",
   },
-  progress: {
+
+  // — bas d'écran commun
+  bottomArea: {
+    width: "100%",
+    marginTop: "auto",
+    marginBottom: 54,
+    alignItems: "center",
+    gap: 26,
+  },
+  controls: {
     flexDirection: "row",
-    gap: 8,
-    marginTop: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 44,
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#222",
+  skipBtn: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    opacity: 0.55,
   },
-  dotActive: {
-    backgroundColor: "#fff",
+  playBtn: {
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    backgroundColor: palette.glass,
+    borderWidth: 1,
+    borderColor: palette.glassBorder,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  dotDone: {
-    backgroundColor: "#444",
+  playBtnDisabled: {
+    opacity: 0.55,
   },
+  pillBtn: {
+    backgroundColor: palette.glass,
+    borderWidth: 1,
+    borderColor: palette.glassBorder,
+    borderRadius: 26,
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+  },
+  pillBtnText: {
+    color: palette.ink,
+    fontSize: 16,
+    fontWeight: "600",
+  },
+
+  // — sources
   sourcesToggle: {
-    marginTop: 8,
+    marginTop: -8,
   },
   sourcesLabel: {
     fontSize: 12,
-    color: "#444",
+    color: palette.faint,
     textDecorationLine: "underline",
   },
   sourcesList: {
@@ -451,37 +668,44 @@ const styles = StyleSheet.create({
   },
   sourceLink: {
     fontSize: 12,
-    color: "#666",
+    color: palette.sub,
   },
-  restartBtn: {
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+
+  // — erreur
+  errorWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 14,
+    paddingBottom: 80,
   },
-  restartText: {
-    color: "#000",
-    fontWeight: "600",
-    fontSize: 15,
+  errorTitle: {
+    fontFamily: serif,
+    fontSize: 30,
+    color: palette.ink,
   },
   errorText: {
-    color: "#ff4444",
+    color: palette.danger,
     textAlign: "center",
-    fontSize: 15,
-    marginBottom: 24,
+    fontSize: 14,
+    lineHeight: 20,
+    paddingHorizontal: 12,
+    marginBottom: 10,
   },
+
+  // — debug (toggle via le bouton …)
   debugBox: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
     maxHeight: 220,
-    backgroundColor: "rgba(0,0,0,0.85)",
+    backgroundColor: "rgba(20, 16, 8, 0.88)",
     borderTopWidth: 1,
-    borderTopColor: "#222",
+    borderTopColor: "rgba(255,255,255,0.15)",
   },
   debugLine: {
-    color: "#6f6",
+    color: "#9fdc9f",
     fontSize: 10,
     fontFamily: "Courier",
     lineHeight: 14,
