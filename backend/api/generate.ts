@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { randomUUID } from "crypto";
 import { generateAngle } from "./agents/angle";
 import { buildPlaylist } from "./agents/playlist";
-import { generateNarration } from "./agents/narration";
+import { generateNarration, fitNarrationToBudget } from "./agents/narration";
 import { verifyNarration } from "./agents/verify";
 import { reviewEpisode } from "./agents/episode";
 import { generateVoice } from "./agents/voice";
@@ -12,7 +12,7 @@ import {
   type TrackDossier,
 } from "./agents/editor";
 import { planBroadcast } from "./agents/producer";
-import { planPacing } from "../lib/editorial/pacing";
+import { planPacing, countWords } from "../lib/editorial/pacing";
 import { researchArtist, type SourcedFact } from "../lib/research";
 import { uploadNarrationAudio } from "../lib/storage";
 import { findBestTrackMatch, type SpotifyTrack } from "../lib/spotify";
@@ -615,8 +615,19 @@ async function runHandler(req: VercelRequest, res: VercelResponse) {
         verifyNarration(draft, verificationFacts, {
           min: pacingSlot.minWords,
           max: pacingSlot.maxWords,
-        }).then((verified) => {
-          narrationTexts[i] = verified;
+        }).then(async (verified) => {
+          // Garde-fou d'horloge : les consignes seules ne tiennent pas le
+          // budget (le modèle imite la longueur des narrations précédentes).
+          // Au-delà de 10% de dépassement, une passe de montage compresse.
+          let final = verified;
+          if (countWords(final) > pacingSlot.maxWords * 1.1) {
+            final = await fitNarrationToBudget(
+              final,
+              pacingSlot.minWords,
+              pacingSlot.maxWords,
+            ).catch(() => final);
+          }
+          narrationTexts[i] = final;
         }),
       );
     }

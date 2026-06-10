@@ -106,7 +106,6 @@ ${description}
 
 ${context}
 
-${pacing ? `${pacing.brief}\n` : ""}
 Faits globaux de l'émission — à utiliser pour tenir le fil rouge :
 ${facts.emissionFacts.slice(0, 2500)}
 
@@ -132,10 +131,47 @@ ${
     : "Rien encore, c'est l'ouverture de l'émission."
 }
 
-Écris la narration.`,
+${
+  pacing
+    ? `${pacing.brief}
+
+BUDGET IMPÉRATIF : entre ${pacing.minWords} et ${pacing.maxWords} mots. C'est une contrainte d'antenne, pas une suggestion. N'imite NI la longueur des narrations précédentes NI celle des exemples du mètre-étalon : ton rôle a SON budget, c'est lui qui commande.
+
+`
+    : ""
+}Écris la narration.`,
       },
     ],
   });
 
   return response.content[0].type === "text" ? response.content[0].text : "";
+}
+
+// Garde-fou de format : ramène une narration qui déborde à son budget de
+// mots, sans toucher aux faits ni à la chute. Les consignes de longueur
+// seules ne suffisent pas — le modèle imite la longueur des exemples et des
+// narrations précédentes ; ici on compresse APRÈS coup, déterministe.
+export async function fitNarrationToBudget(
+  narration: string,
+  minWords: number,
+  maxWords: number,
+): Promise<string> {
+  const response = await getClient().messages.create({
+    model: "claude-sonnet-4-5",
+    max_tokens: 400,
+    system: `Tu es monteur radio. On te donne une narration trop longue pour son créneau d'antenne. Tu la COMPRESSES entre ${minWords} et ${maxWords} mots, en préservant dans l'ordre : (1) la dernière phrase ou son équivalent — la chute qui précède la musique, (2) le fil du récit (le pont entre les morceaux, l'arc), (3) les faits les plus forts et les vraies citations. Tu coupes d'abord le contexte secondaire, les noms qui ne servent qu'une fois, les détails qui n'ajoutent rien au fil. Tu ne reformules pas pour reformuler : tu coupes. Tu n'ajoutes RIEN. Le ton reste oral, au tutoiement. Réponds UNIQUEMENT avec la narration compressée.`,
+    messages: [
+      {
+        role: "user",
+        content: `Budget : ${minWords} à ${maxWords} mots.
+
+Narration à compresser (${narration.trim().split(/\s+/).length} mots) :
+${narration}`,
+      },
+    ],
+  });
+
+  const text =
+    response.content[0].type === "text" ? response.content[0].text.trim() : "";
+  return text || narration;
 }

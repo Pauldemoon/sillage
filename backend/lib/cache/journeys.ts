@@ -31,7 +31,11 @@ const JOURNEY_TTL_DAYS = 120;
 //                   sortie) — longueurs par rôle au lieu de 4 monologues
 //                   uniformes de 130-160 mots ; sortie avec graine de
 //                   prochain voyage.
-const PIPELINE_VERSION = "v5";
+// v6 (2026-06-10) : l'horloge TENUE — brief de rôle déplacé en fin de prompt
+//                   (le modèle imitait la longueur des narrations précédentes)
+//                   + compression de montage si dépassement >10%. Les voyages
+//                   v5 (budgets explosés, sortie sans graine) expirent seuls.
+const PIPELINE_VERSION = "v6";
 
 function seedKey(title: string, artist: string): string {
   return `${PIPELINE_VERSION}:${cacheKey(title, artist)}`;
