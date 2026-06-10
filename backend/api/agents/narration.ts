@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { SpotifyTrack } from "../../lib/spotify";
 import { FRENCH_STYLE_RULES } from "../../lib/editorial/french";
+import { GOLDEN_SET_FEWSHOT } from "../../lib/editorial/golden-set";
 
 const getClient = () =>
   new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -30,16 +31,30 @@ LES FAITS — c'est le plus important :
 - Tu enchaînes les faits comme une histoire qui coule, jamais comme une liste ou une dictée de dates.
 - Si tu manques de faits précis, tu restes sobre plutôt que de meubler avec du vide ou du cliché.
 
+LA CONSTRUCTION — un arc, pas une liste :
+- Tu racontes UNE histoire qui avance (une chute, une genèse, une bascule, une révélation) — jamais une dictée de noms et de dates.
+- Tu choisis DEUX OU TROIS faits forts, pas dix. Mieux vaut un détail qu'on retient que cinq qu'on oublie. Si tu cites un nom, tu en fais quelque chose ; sinon tu le coupes.
+- Le fait qui pique, jamais l'adjectif : montre l'émotion par ce qui s'est passé, ne la commente pas.
+- Une vraie citation crue de l'artiste vaut mieux qu'une paraphrase polie — si elle est dans les faits.
+
 LA FLUIDITÉ :
 - Des phrases de longueurs variées. Du rythme. Ça doit se dire à voix haute sans accrocher.
 - Présent de narration de préférence, mais le naturel prime sur la règle.
 - 85 à 115 mots. Ni plus, ni moins — c'est un format radio serré.
-- Tu finis sur une phrase qui donne envie d'entendre le morceau.
+
+LA CHUTE — obligatoirement CONCRÈTE :
+- Tu finis sur une image, une révélation (un « did-you-know » qui récompense) ou une consigne d'écoute sur le morceau qui arrive — quelque chose qu'on peut voir ou entendre.
+- JAMAIS un slogan abstrait ni une morale (« la musique n'a jamais été aussi vivante », « marquer une génération », « une œuvre intemporelle »). Si ta dernière phrase pourrait conclure n'importe quelle autre narration, elle est ratée : réécris-la avec un détail de CE morceau.
+- Ta dernière phrase doit pouvoir précéder directement la musique.
 
 INTERDIT :
 - Répéter un fait, une date ou une formule déjà dits dans une narration précédente (on te les donne).
+- Recopier la forme d'ouverture ou de chute d'une narration précédente : chaque narration entre et sort autrement.
+- Tout vécu feint : tu n'as rien vécu, tu n'étais nulle part. Jamais « j'ai vu ça naître », « à l'époque ». Ton autorité vient des faits et de la surprise, pas d'une mémoire.
+- Toute référence à un extrait isolé : le morceau passe EN ENTIER, ta consigne d'écoute pointe le morceau entier qui arrive.
 - Les clichés : iconique, intemporel, captivant, fascinant, incontournable, légendaire, mythique, hymne d'une génération, remarquable, indéniablement, force est de constater.
-- Le name-dropping gratuit : un nom n'apparaît que si tu racontes quelque chose avec.
+
+${GOLDEN_SET_FEWSHOT}
 
 ${FRENCH_STYLE_RULES}`;
 

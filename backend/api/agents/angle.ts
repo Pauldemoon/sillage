@@ -3,6 +3,7 @@ import {
   FRENCH_STYLE_RULES,
   FRENCH_TITLE_RULES,
 } from "../../lib/editorial/french";
+import { sampleRecipes, formatRecipes } from "../../lib/editorial/recipes";
 
 const getClient = () =>
   new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -47,6 +48,12 @@ export async function generateAngle(
         )}. Choisis OBLIGATOIREMENT un archétype DIFFÉRENT pour lui offrir un nouveau voyage.`
       : "";
 
+  // Rotation de recettes : ~12 lentilles tirées au sort dans la banque de 100,
+  // différentes à chaque génération. Elles inspirent l'angle sans l'imposer —
+  // la fraîcheur vient du tirage, la pertinence du choix laissé au modèle.
+  const recipesNote = `\n\nPour t'inspirer, douze lentilles éditoriales tirées au sort (des patterns, pas des angles finis — n'en utilise une que si les faits réels du dossier l'incarnent vraiment ; sinon ignore-les) :
+${formatRecipes(sampleRecipes(12))}`;
+
   const response = await getClient().messages.create({
     model: "claude-sonnet-4-5",
     max_tokens: 400,
@@ -74,7 +81,7 @@ Réponds UNIQUEMENT en JSON valide, sans markdown :
         content: `Titre de départ : "${title}" de ${artist}
 
 Faits sourcés disponibles :
-${facts}${avoidNote}`,
+${facts}${avoidNote}${recipesNote}`,
       },
     ],
   });

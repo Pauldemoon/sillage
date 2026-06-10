@@ -3,6 +3,7 @@ import { generateAngle } from "./agents/angle";
 import { buildPlaylist } from "./agents/playlist";
 import { generateNarration } from "./agents/narration";
 import { verifyNarration } from "./agents/verify";
+import { reviewEpisode } from "./agents/episode";
 import { generateVoice } from "./agents/voice";
 import {
   reviewPlaylist,
@@ -467,53 +468,60 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       Math.max(curatedTracks.length - 1, 0),
     );
 
-    // Agent 3 — narrations EN PARALLÈLE (gros gain de latence). Chacune garde
-    // son contexte éditorial (angle, position, faits des morceaux voisins),
-    // mais perd la conscience du texte EXACT des autres : compromis assumé
-    // pour tenir sous la limite de 60 s. La progression reste portée par
-    // l'angle commun et les rôles éditoriaux assignés à chaque morceau.
+    // Agent 3 — narrations SÉQUENTIELLES : chaque narration lit le texte
+    // EXACT des précédentes. C'est ce qui tue les redites, les gabarits
+    // identiques et les spoilers entre narrations — le « mal construit ».
+    // Le parallèle était un compromis forcé par le cap 60 s de Vercel ;
+    // Railway n'a pas ce cap, on paie ~10-15 s de plus par narration une
+    // seule fois par voyage neuf (Layer 3 ressert les suivants).
+    // La vérification factuelle, elle, reste hors du chemin critique : elle
+    // ne corrige que des détails et ne nourrit pas la narration suivante.
     const narrationTexts = Array<string>(curatedTracks.length).fill("");
-    const drafts = Array<string>(curatedTracks.length).fill("");
-    const narrationIndices: number[] = [];
+    const previousDrafts: string[] = [];
+    const verifications: Promise<void>[] = [];
     for (let i = narrationStartIndex; i < curatedTracks.length; i++) {
-      narrationIndices.push(i);
-    }
-    await Promise.all(
-      narrationIndices.map(async (i) => {
-        drafts[i] = await generateNarration(
-          curatedTracks,
-          angle,
-          description,
-          i,
-          {
-            emissionFacts: seedResearch.facts,
-            currentTrackFacts: dossiers[i].facts,
-            previousTrackFacts: dossiers[i - 1]?.facts,
-            nextTrackFacts: dossiers[i + 1]?.facts,
-          },
-          [],
-        );
-      }),
-    );
-    _lap("narrations");
+      const draft = await generateNarration(
+        curatedTracks,
+        angle,
+        description,
+        i,
+        {
+          emissionFacts: seedResearch.facts,
+          currentTrackFacts: dossiers[i].facts,
+          previousTrackFacts: dossiers[i - 1]?.facts,
+          nextTrackFacts: dossiers[i + 1]?.facts,
+        },
+        [...previousDrafts],
+      );
+      previousDrafts.push(draft);
 
-    // Agent 4 — vérification factuelle EN PARALLÈLE, hors du chemin critique :
-    // elle ne corrige que des détails, donc inutile de bloquer la génération
-    // de la narration suivante (gros gain de latence vs séquentiel).
-    await Promise.all(
-      drafts.map(async (draft, i) => {
-        if (!draft) return;
-        const verificationFacts = [
-          `[Angle de l'émission]\n${seedResearch.facts}`,
-          `[Morceau courant]\n${dossiers[i].facts}`,
-          dossiers[i + 1] ? `[Morceau suivant]\n${dossiers[i + 1].facts}` : "",
-        ]
-          .filter(Boolean)
-          .join("\n\n---\n\n");
-        narrationTexts[i] = await verifyNarration(draft, verificationFacts);
-      }),
+      const verificationFacts = [
+        `[Angle de l'émission]\n${seedResearch.facts}`,
+        `[Morceau courant]\n${dossiers[i].facts}`,
+        dossiers[i + 1] ? `[Morceau suivant]\n${dossiers[i + 1].facts}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n---\n\n");
+      verifications.push(
+        verifyNarration(draft, verificationFacts).then((verified) => {
+          narrationTexts[i] = verified;
+        }),
+      );
+    }
+    await Promise.all(verifications);
+    _lap("narrations+verify");
+
+    // Agent 3bis — relecture d'ÉPISODE : gabarits répétés, redites et
+    // closers-slogans sont invisibles narration par narration ; on relit
+    // l'ensemble d'un seul regard avant de passer au studio.
+    const trackLabels = curatedTracks.map(
+      (track) => `${track.title} — ${track.artist}`,
     );
-    _lap("verify");
+    const reviewedTexts = await reviewEpisode(angle, trackLabels, narrationTexts);
+    for (let i = 0; i < narrationTexts.length; i++) {
+      narrationTexts[i] = reviewedTexts[i];
+    }
+    _lap("episodeReview");
 
     const audioUrls = await synthNarrations(narrationTexts);
     _lap("synthNarrations");

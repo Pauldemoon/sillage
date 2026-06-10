@@ -14,6 +14,18 @@ import { getCache, cacheKey } from "./client";
 
 const JOURNEY_TTL_DAYS = 120;
 
+// Version du pipeline éditorial, embarquée dans la clé de graine. À
+// incrémenter quand la qualité de narration change assez pour que les
+// voyages déjà en cache ne soient plus représentatifs (ex. refonte du
+// prompt, golden-set) : les anciennes lignes ne matchent plus et expirent
+// d'elles-mêmes, sans toucher à la table.
+// v2 (2026-06-10) : narration séquentielle + few-shot + relecture d'épisode.
+const PIPELINE_VERSION = "v2";
+
+function seedKey(title: string, artist: string): string {
+  return `${PIPELINE_VERSION}:${cacheKey(title, artist)}`;
+}
+
 function expiresAt(days: number): string {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
 }
@@ -36,7 +48,7 @@ export async function getJourneyCandidates<T = unknown>(
     const { data } = await db
       .from("journey_cache")
       .select("journey_id, archetype, artists, payload, expires_at")
-      .eq("seed_key", cacheKey(title, artist))
+      .eq("seed_key", seedKey(title, artist))
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: true });
 
@@ -66,7 +78,7 @@ export async function saveJourney(
   try {
     await db.from("journey_cache").insert({
       journey_id: journeyId,
-      seed_key: cacheKey(title, artist),
+      seed_key: seedKey(title, artist),
       archetype,
       artists,
       payload,
