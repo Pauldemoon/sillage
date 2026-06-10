@@ -75,10 +75,18 @@ export interface Emission {
 const POLL_INTERVAL_MS = 3000;
 const GENERATION_DEADLINE_MS = 5 * 60 * 1000;
 
+export interface Teaser {
+  text: string;
+  audioUrl: string;
+}
+
 export async function generateEmission(
   title: string,
   artist: string,
   memory?: UserMemoryInput,
+  // Appelé UNE fois si le backend publie la promesse de Charlie pendant que
+  // la génération tourne — l'app la joue par-dessus le morceau de départ.
+  onTeaser?: (teaser: Teaser) => void,
 ): Promise<Emission> {
   // 1) Démarrer le job — requête courte, renvoie un jobId immédiatement.
   let start;
@@ -102,6 +110,7 @@ export async function generateEmission(
 
   // 2) Poller le résultat — chaque requête est courte, donc jamais coupée.
   const deadline = Date.now() + GENERATION_DEADLINE_MS;
+  let teaserDelivered = false;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
     let poll;
@@ -121,7 +130,14 @@ export async function generateEmission(
     if (data?.status === "error") {
       throw new Error(data.message || "Génération échouée");
     }
-    // status "pending" → on continue d'attendre.
+    // status "pending" → on continue d'attendre. Le teaser arrive en
+    // résultat partiel, une seule fois.
+    if (!teaserDelivered && onTeaser && data?.teaser?.audioUrl) {
+      teaserDelivered = true;
+      try {
+        onTeaser(data.teaser as Teaser);
+      } catch {}
+    }
   }
   throw new Error("La génération a pris trop de temps (5 min)");
 }

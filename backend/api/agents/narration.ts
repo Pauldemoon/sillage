@@ -89,7 +89,7 @@ Le pont tient sur un FAIT concret tiré des sources, jamais sur une impression o
 
   const response = await getClient().messages.create({
     model: "claude-sonnet-4-5",
-    max_tokens: 400,
+    max_tokens: 650,
     // Prompt caching : system identique aux 4 narrations d'une émission.
     system: [
       {
@@ -158,7 +158,7 @@ export async function fitNarrationToBudget(
 ): Promise<string> {
   const response = await getClient().messages.create({
     model: "claude-sonnet-4-5",
-    max_tokens: 400,
+    max_tokens: 650,
     system: `Tu es monteur radio. On te donne une narration trop longue pour son créneau d'antenne. Tu la COMPRESSES entre ${minWords} et ${maxWords} mots, en préservant dans l'ordre : (1) la dernière phrase ou son équivalent — la chute qui précède la musique, (2) le fil du récit (le pont entre les morceaux, l'arc), (3) les faits les plus forts et les vraies citations. Tu coupes d'abord le contexte secondaire, les noms qui ne servent qu'une fois, les détails qui n'ajoutent rien au fil. Tu ne reformules pas pour reformuler : tu coupes. Tu n'ajoutes RIEN. Le ton reste oral, au tutoiement. Réponds UNIQUEMENT avec la narration compressée.`,
     messages: [
       {

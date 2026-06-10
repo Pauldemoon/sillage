@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { generateAngle } from "./agents/angle";
 import { buildPlaylist } from "./agents/playlist";
 import { generateNarration, fitNarrationToBudget } from "./agents/narration";
+import { generateTeaser } from "./agents/teaser";
 import { verifyNarration } from "./agents/verify";
 import { reviewEpisode } from "./agents/episode";
 import { generateVoice } from "./agents/voice";
@@ -349,8 +350,10 @@ async function curateDossiers(
 // Chaque requête est courte → jamais le mur des 60 s. Le travail lourd tourne
 // en fond. Stockage en mémoire (Railway = 1 instance) ; si le service
 // redémarre pendant un job, le poll renvoie "inconnu" et l'app relance.
+type Teaser = { text: string; audioUrl: string };
+
 type Job =
-  | { status: "pending"; ts: number }
+  | { status: "pending"; ts: number; teaser?: Teaser }
   | { status: "done"; result: unknown; ts: number }
   | { status: "error"; message: string; ts: number };
 
@@ -401,6 +404,16 @@ function startGenerationJob(
     runHandler(
       { method: "POST", body: { title, artist, memory } } as any,
       mockRes,
+      {
+        // Résultat partiel : le teaser est accroché au job pendant qu'il est
+        // "pending" — le poll suivant de l'app le récupère.
+        onTeaser(teaser) {
+          const job = jobs.get(id);
+          if (job?.status === "pending") {
+            jobs.set(id, { ...job, teaser });
+          }
+        },
+      },
     ),
   ).catch((err: any) => {
     console.error(err);
@@ -427,7 +440,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         message: "Job inconnu (serveur redémarré ?) — relance l'émission.",
       });
     }
-    if (job.status === "pending") return res.status(200).json({ status: "pending" });
+    if (job.status === "pending")
+      return res
+        .status(200)
+        .json({ status: "pending", teaser: job.teaser ?? null });
     jobs.delete(jobId);
     if (job.status === "error")
       return res.status(200).json({ status: "error", message: job.message });
@@ -442,7 +458,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   return res.status(200).json({ status: "pending", jobId: id });
 }
 
-async function runHandler(req: VercelRequest, res: VercelResponse) {
+// `hooks.onTeaser` (mode job uniquement) publie un résultat PARTIEL pendant
+// que la génération tourne : la promesse de Charlie, jouée par l'app
+// par-dessus le morceau de départ dès qu'elle est prête (~40-70 s).
+interface RunHooks {
+  onTeaser?: (teaser: { text: string; audioUrl: string }) => void;
+}
+
+async function runHandler(
+  req: VercelRequest,
+  res: VercelResponse,
+  hooks?: RunHooks,
+) {
   if (req.method !== "POST") return res.status(405).end();
 
   const { title, artist, memory } = req.body;
@@ -536,6 +563,31 @@ async function runHandler(req: VercelRequest, res: VercelResponse) {
       heardArchetypesFor(journeyCandidates, heardJourneys),
     );
     _lap("angle");
+
+    // Teaser : hors chemin critique — texte (Haiku) + voix + upload pendant
+    // que la playlist et la recherche tournent. S'il échoue, tant pis : la
+    // génération continue, l'app n'aura juste pas de promesse anticipée.
+    if (hooks?.onTeaser) {
+      const publishTeaser = hooks.onTeaser;
+      (async () => {
+        try {
+          const text = await generateTeaser(
+            angle,
+            description,
+            title,
+            artist,
+            seedResearch.facts,
+          );
+          if (!text) return;
+          const buf = await synthOne(text);
+          if (!buf) return;
+          const url = await uploadNarrationAudio(buf);
+          if (url) publishTeaser({ text, audioUrl: url });
+        } catch (err) {
+          console.error("teaser:", err);
+        }
+      })();
+    }
 
     // Agent 2 — playlist (nourrie du pool de candidats validés, Layer 2)
     const candidatePool = buildCandidatePool(journeyCandidates);

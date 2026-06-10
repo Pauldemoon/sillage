@@ -48,7 +48,7 @@ export async function verifyNarration(
     // narration à des faits FOURNIS), pas de la création. Le style reste
     // sur Sonnet côté narration. Gros gain de coût sur 4 appels riches en entrée.
     model: "claude-haiku-4-5",
-    max_tokens: 400,
+    max_tokens: 650,
     // Prompt caching : le system prompt est identique aux 4 appels d'une
     // même émission → −90% sur les tokens d'entrée mis en cache.
     system: [

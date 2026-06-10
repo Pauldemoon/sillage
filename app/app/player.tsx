@@ -82,11 +82,14 @@ export default function PlayerScreen() {
   const [debugLines, setDebugLines] = useState<string[]>([]);
   const isPaused = useRef(false);
   const stopped = useRef(false);
+  // Phase lisible depuis les callbacks asynchrones (teaser) sans closure périmée.
+  const phaseRef = useRef<Phase>("connecting");
 
   // Abonnement au journal de debug (overlay à l'écran).
   useEffect(() => subscribeDebug(setDebugLines), []);
   // Trace chaque changement de phase.
   useEffect(() => {
+    phaseRef.current = phase;
     logDebug(`phase → ${phase}`);
   }, [phase]);
 
@@ -157,7 +160,19 @@ export default function PlayerScreen() {
       // permet à la découverte de s'accumuler d'une émission à l'autre.
       const memory = await loadMemory();
       logDebug(`generate "${title}" / "${artist}"…`);
-      const generationPromise = generateEmission(title, artist, memory).then(
+      // Teaser : la promesse de Charlie arrive en cours de génération et se
+      // joue par-dessus le morceau de départ — uniquement si on y est encore.
+      const onTeaser = ({ audioUrl }: { audioUrl: string }) => {
+        if (stopped.current || phaseRef.current !== "music") return;
+        logDebug("teaser reçu → lecture par-dessus la graine");
+        playNarration(audioUrl).catch(() => {});
+      };
+      const generationPromise = generateEmission(
+        title,
+        artist,
+        memory,
+        onTeaser,
+      ).then(
         (data) => {
           logDebug(
             `generate OK: cached=${(data as any)?.cached} tracks=${data?.tracks?.length}`,

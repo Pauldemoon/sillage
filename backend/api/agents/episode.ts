@@ -47,7 +47,7 @@ export async function reviewEpisode(
   try {
     const response = await getClient().messages.create({
       model: "claude-sonnet-4-5",
-      max_tokens: 2500,
+      max_tokens: 3200,
       system: SYSTEM_PROMPT,
       messages: [
         {
