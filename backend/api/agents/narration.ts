@@ -10,7 +10,6 @@ export interface NarrationFacts {
   emissionFacts: string;
   currentTrackFacts: string;
   previousTrackFacts?: string;
-  nextTrackFacts?: string;
 }
 
 const SYSTEM_PROMPT = `Tu es le réalisateur d'une émission de radio musicale, dans l'esprit de FIP ou Nova. Tu écris la voix qui parle entre les morceaux. Imagine un disquaire passionné qui tend un disque à UNE personne et lui raconte, en confidence, pourquoi il compte.
@@ -26,7 +25,7 @@ LES FAITS — c'est le plus important :
 - Chaque phrase factuelle s'appuie sur les faits RÉELS des sources. Tu n'inventes JAMAIS une date, un nom, un chiffre, une citation.
 - Les faits du morceau courant sont la vérité de référence pour parler de ce morceau.
 - Les faits globaux de l'émission servent à tenir l'angle, pas à attribuer au morceau courant des détails qui ne le concernent pas.
-- Les faits du morceau suivant servent seulement à préparer une transition, sans dévoiler toute son histoire.
+- Les faits du morceau qui vient de passer servent à amorcer le pont — tu repars d'un détail concret de ce qu'on vient d'entendre, sans le réexpliquer en entier.
 - Tu choisis les faits les plus intéressants et inattendus, pas les plus évidents.
 - Tu enchaînes les faits comme une histoire qui coule, jamais comme une liste ou une dictée de dates.
 - Si tu manques de faits précis, tu restes sobre plutôt que de meubler avec du vide ou du cliché.
@@ -68,16 +67,18 @@ export async function generateNarration(
   previousNarrations: string[] = [],
 ): Promise<string> {
   const currentTrack = tracks[index];
-  const nextTrack = tracks[index + 1];
 
+  // La narration d'index i passe JUSTE AVANT le morceau i (cf. player.tsx) :
+  // c'est le pont entre le morceau qui vient de finir (i-1) et celui qui
+  // démarre immédiatement après la voix (i). La chute doit donc atterrir sur
+  // CE morceau-ci, pas sur un titre plus loin dans la playlist.
   const context =
     index === 0
-      ? `Tu introduis l'émission et le premier morceau : "${currentTrack.title}" de ${currentTrack.artist}.`
-      : `Tu viens de diffuser "${tracks[index - 1].title}" de ${tracks[index - 1].artist}. Tu introduis maintenant "${currentTrack.title}" de ${currentTrack.artist}.`;
-
-  const transition = nextTrack
-    ? `Amène vers le prochain morceau : "${nextTrack.title}" de ${nextTrack.artist}.`
-    : `C'est le dernier morceau. Conclus l'émission.`;
+      ? `Tu ouvres l'émission. Le tout premier morceau, "${currentTrack.title}" de ${currentTrack.artist}, démarre juste après ta voix. Pose l'angle et donne envie de l'écouter.`
+      : `Ta narration est un PONT entre deux morceaux.
+- Celui qui vient de se terminer : "${tracks[index - 1].title}" de ${tracks[index - 1].artist}.
+- Celui qui démarre IMMÉDIATEMENT après ta voix : "${currentTrack.title}" de ${currentTrack.artist}.
+Le pont tient sur un FAIT concret tiré des sources, jamais sur une impression ou un thème vague. Les manières de relier deux titres par un fait sont innombrables — producteur, sample, studio, label, ville, année, instrument, ingénieur du son, reprise, dispute, rencontre, hasard de calendrier, influence directe de l'un sur l'autre… : trouve celle qui colle À CES deux titres-là, et ne reprends pas le même type de lien deux fois de suite dans l'émission. Si aucun fait ne relie vraiment les deux, n'en fabrique pas : embraye franchement sur le fait le plus fort du morceau qui arrive. Écris fluide et vivant, garde la vibe — mais c'est le fait qui porte la phrase, pas l'inverse. Ta toute dernière phrase précède directement "${currentTrack.title}" : elle pointe CE morceau-là.`;
 
   const response = await getClient().messages.create({
     model: "claude-sonnet-4-5",
@@ -97,25 +98,17 @@ export async function generateNarration(
 ${description}
 
 ${context}
-${transition}
 
 Faits globaux de l'émission — à utiliser pour tenir le fil rouge :
 ${facts.emissionFacts.slice(0, 2500)}
 
-Faits sourcés du morceau courant — priorité absolue pour toute affirmation factuelle :
+Faits sourcés du morceau qui ARRIVE (celui que tu introduis) — priorité absolue pour toute affirmation factuelle :
 ${facts.currentTrackFacts.slice(0, 6000)}
 
 ${
   facts.previousTrackFacts
-    ? `Faits du morceau précédent — seulement pour comprendre d'où vient la transition :
-${facts.previousTrackFacts.slice(0, 900)}`
-    : ""
-}
-
-${
-  facts.nextTrackFacts
-    ? `Faits du morceau suivant — seulement pour amorcer la suite :
-${facts.nextTrackFacts.slice(0, 2000)}`
+    ? `Faits du morceau qui VIENT DE PASSER — pour bâtir le pont, repartir d'un détail concret de ce qu'on vient d'entendre (ne le réexplique pas en entier) :
+${facts.previousTrackFacts.slice(0, 1500)}`
     : ""
 }
 

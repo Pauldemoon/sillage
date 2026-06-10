@@ -592,7 +592,6 @@ async function runHandler(req: VercelRequest, res: VercelResponse) {
           emissionFacts: seedResearch.facts,
           currentTrackFacts: dossiers[i].facts,
           previousTrackFacts: dossiers[i - 1]?.facts,
-          nextTrackFacts: dossiers[i + 1]?.facts,
         },
         [...previousDrafts],
       );
@@ -601,7 +600,7 @@ async function runHandler(req: VercelRequest, res: VercelResponse) {
       const verificationFacts = [
         `[Angle de l'émission]\n${seedResearch.facts}`,
         `[Morceau courant]\n${dossiers[i].facts}`,
-        dossiers[i + 1] ? `[Morceau suivant]\n${dossiers[i + 1].facts}` : "",
+        dossiers[i - 1] ? `[Morceau précédent]\n${dossiers[i - 1].facts}` : "",
       ]
         .filter(Boolean)
         .join("\n\n---\n\n");

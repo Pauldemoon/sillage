@@ -23,7 +23,11 @@ const JOURNEY_TTL_DAYS = 120;
 // v3 (2026-06-10) : narration resserrée (130-160 mots, anti-radotage) + voix
 //                   Gemini. Les voyages v2 (longs/circulaires) ne sont plus
 //                   resservis et expirent seuls.
-const PIPELINE_VERSION = "v3";
+// v4 (2026-06-10) : narration recadrée en PONT (morceau fini → morceau qui
+//                   arrive). Corrige l'off-by-one qui faisait amorcer le titre
+//                   i+1 (deux crans plus loin) et "conclure" avant le dernier
+//                   morceau — d'où le lien faible entre les titres.
+const PIPELINE_VERSION = "v4";
 
 function seedKey(title: string, artist: string): string {
   return `${PIPELINE_VERSION}:${cacheKey(title, artist)}`;

@@ -39,7 +39,6 @@ async function test() {
   const narration = await generateNarration(tracks, angle, description, 0, {
     emissionFacts: facts,
     currentTrackFacts: facts,
-    nextTrackFacts: facts,
   });
   console.log("   ✅ Narration:", narration.slice(0, 150) + "...");
 
