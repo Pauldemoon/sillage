@@ -50,6 +50,10 @@ type Phase =
 // la fin réelle du morceau, pour chevaucher sa toute fin (duckée par iOS)
 // plutôt que de laisser un blanc, et pour garder l'App Remote vivante.
 const NARRATION_LEAD_MS = 7000;
+// Talk-up : le morceau suivant est lancé quand il reste ce temps de voix —
+// il naît ducké sous les derniers mots et monte quand Charlie se tait.
+// Couvre aussi la latence du play Web API (~0,5-1 s). Réglable en OTA.
+const TALKUP_MS = 2200;
 
 export default function PlayerScreen() {
   const {
@@ -233,14 +237,25 @@ export default function PlayerScreen() {
     setEmission(data);
     setTrackIndex(index);
 
+    // Talk-up : pendant la fin de la narration, le morceau démarre déjà,
+    // ducké sous la voix. `early` garde la promesse pour ne pas relancer.
+    let early: Promise<void> | null = null;
     if (!options.skipNarration && data.audioUrls[index]) {
       setPhase("narration");
-      await playNarration(data.audioUrls[index]);
+      await playNarration(data.audioUrls[index], {
+        tailMs: TALKUP_MS,
+        onTail: () => {
+          if (stopped.current) return;
+          early = playTrack(data.tracks[index].spotifyUri);
+          // L'échec éventuel est re-géré au `await` ci-dessous.
+          early.catch(() => {});
+        },
+      });
       if (stopped.current) return;
     }
 
     setPhase("music");
-    await playTrack(data.tracks[index].spotifyUri);
+    await (early ?? playTrack(data.tracks[index].spotifyUri));
     const hasNext = index < data.tracks.length - 1;
     // On anticipe la fin seulement s'il reste une narration à enchaîner.
     await waitForTrackEnd(

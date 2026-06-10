@@ -28,7 +28,14 @@ const FADE_IN_MS = 600;
 // Les narrations font < 1 min ; au-delà, c'est qu'un son n'a pas chargé.
 const NARRATION_MAX_MS = 90000;
 
-export async function playNarration(uri: string): Promise<void> {
+export async function playNarration(
+  uri: string,
+  // Talk-up radio : `onTail` est appelé UNE fois quand il reste ~`tailMs` de
+  // voix. Le player lance alors le morceau suivant, qui naît DUCKÉ sous les
+  // derniers mots (duckOthers est encore actif) et monte quand la voix se
+  // tait — au lieu d'un blanc entre la dernière syllabe et la musique.
+  options?: { tailMs?: number; onTail?: () => void },
+): Promise<void> {
   logDebug(`narration play (${uri.slice(0, 32)}…)`);
   await stopAudio();
   // On ducke Spotify uniquement maintenant (il est déjà connecté et joue).
@@ -46,6 +53,9 @@ export async function playNarration(uri: string): Promise<void> {
     }, (FADE_IN_MS / steps) * i);
   }
 
+  const tailMs = options?.tailMs ?? 0;
+  let tailFired = false;
+
   try {
     await new Promise<void>((resolve) => {
       let done = false;
@@ -54,6 +64,21 @@ export async function playNarration(uri: string): Promise<void> {
         "playbackStatusUpdate",
         (status) => {
           if (done) return;
+          // Talk-up : on déclenche quand la fin de la voix approche.
+          if (
+            !tailFired &&
+            options?.onTail &&
+            tailMs > 0 &&
+            status.isLoaded &&
+            status.duration > 0 &&
+            (status.duration - status.currentTime) * 1000 <= tailMs
+          ) {
+            tailFired = true;
+            logDebug(`talk-up: lancement du morceau sous la voix (${tailMs}ms)`);
+            try {
+              options.onTail();
+            } catch {}
+          }
           // Échec de chargement (URL injoignable, 404, data-URI illisible…) :
           // `didJustFinish` n'arrivera JAMAIS. On lit `status.error` (champ
           // expo-audio), on log, et on enchaîne — au lieu de geler tout le
