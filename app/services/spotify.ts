@@ -34,15 +34,38 @@ let connected = false;
 // ("player is not ready").
 let lastAccessToken: string | null = null;
 
+// L'App Remote refuse souvent la socket JUSTE après l'autorisation, le temps
+// que l'app Spotify se réveille et accepte le transport ("Connection refused" /
+// "ensure Spotify app is installed and try to reconnect"). Plutôt qu'échouer du
+// premier coup, on retente quelques fois avec un court délai : l'autorisation a
+// réveillé Spotify, il lui faut juste une ou deux secondes pour être prêt.
+async function connectWithRetry(token: string, label: string): Promise<void> {
+  const MAX = 5;
+  for (let attempt = 1; attempt <= MAX; attempt++) {
+    try {
+      await SpotifyRemote.connect(token);
+      logDebug(`${label} OK ✅ (tentative ${attempt})`);
+      return;
+    } catch (e) {
+      logError(`${label} tentative ${attempt}/${MAX}`, e);
+      if (attempt === MAX) {
+        throw new Error(
+          "Spotify n'a pas répondu. Ouvre l'app Spotify, lance un morceau, puis réessaie (compte Premium requis).",
+        );
+      }
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
+}
+
 export async function connectSpotify(): Promise<void> {
   if (connected) return;
   logDebug("connectSpotify: authorize…");
   const session = await SpotifyAuth.authorize(spotifyConfig);
   lastAccessToken = session.accessToken;
   logDebug(`authorize OK (token ${session.accessToken?.slice(0, 6)}…), connect…`);
-  await SpotifyRemote.connect(session.accessToken);
+  await connectWithRetry(session.accessToken, "connect");
   connected = true;
-  logDebug("connect OK ✅");
 }
 
 // Garantit une App Remote vivante avant toute commande de lecture. Si la
@@ -59,9 +82,8 @@ async function ensureConnected(): Promise<void> {
   if (isConn) return;
   if (lastAccessToken) {
     logDebug("reconnect…");
-    await SpotifyRemote.connect(lastAccessToken);
+    await connectWithRetry(lastAccessToken, "reconnect");
     connected = true;
-    logDebug("reconnect OK ✅");
   } else {
     logDebug("⚠️ pas de token pour reconnect");
   }
