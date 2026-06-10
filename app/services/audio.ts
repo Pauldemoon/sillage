@@ -28,6 +28,56 @@ const FADE_IN_MS = 600;
 // Les narrations font < 1 min ; au-delà, c'est qu'un son n'a pas chargé.
 const NARRATION_MAX_MS = 90000;
 
+// Lit musical sous la voix — l'habillage radio (boucle ambiante ~30 s fournie
+// par Paul). Il démarre avec Charlie, tourne à bas volume sous lui, et meurt
+// en fondu quand la voix se tait : c'est lui qui fait le pont sonore entre la
+// fin de la voix et la montée du morceau suivant.
+const BED_SOURCE = require("../assets/audio/ambiance.mp3");
+const BED_VOLUME = 0.22;
+const BED_FADE_OUT_MS = 900;
+
+let bedPlayer: AudioPlayer | null = null;
+
+function startBed(): void {
+  stopBed();
+  const player = createAudioPlayer(BED_SOURCE);
+  bedPlayer = player;
+  player.loop = true;
+  player.volume = 0;
+  player.play();
+  const steps = 6;
+  for (let i = 1; i <= steps; i++) {
+    setTimeout(() => {
+      if (bedPlayer === player) player.volume = (BED_VOLUME / steps) * i;
+    }, (FADE_IN_MS / steps) * i);
+  }
+}
+
+function stopBed(): void {
+  if (bedPlayer) {
+    bedPlayer.pause();
+    bedPlayer.remove();
+    bedPlayer = null;
+  }
+}
+
+// Fondu de sortie du lit : il survit ~1 s à la voix, le temps que le morceau
+// suivant (déjà lancé par le talk-up) prenne la place.
+async function fadeOutBed(): Promise<void> {
+  const player = bedPlayer;
+  if (!player) return;
+  bedPlayer = null;
+  const steps = 6;
+  for (let i = 1; i <= steps; i++) {
+    setTimeout(() => {
+      player.volume = Math.max(0, BED_VOLUME * (1 - i / steps));
+    }, (BED_FADE_OUT_MS / steps) * i);
+  }
+  await new Promise((r) => setTimeout(r, BED_FADE_OUT_MS + 80));
+  player.pause();
+  player.remove();
+}
+
 export async function playNarration(
   uri: string,
   // Talk-up radio : `onTail` est appelé UNE fois quand il reste ~`tailMs` de
@@ -40,6 +90,7 @@ export async function playNarration(
   await stopAudio();
   // On ducke Spotify uniquement maintenant (il est déjà connecté et joue).
   await setInterruption("duckOthers");
+  startBed();
   const player = createAudioPlayer({ uri: uri });
   currentPlayer = player;
   player.volume = 0;
@@ -101,13 +152,16 @@ export async function playNarration(
       }, NARRATION_MAX_MS);
     });
   } finally {
-    // Quoi qu'il arrive, on rend le focus → Spotify remonte à plein volume.
+    // Le lit survit ~1 s à la voix (fondu), puis on rend le focus → Spotify
+    // remonte à plein volume sous la fin du fondu.
+    await fadeOutBed();
     await setInterruption("mixWithOthers");
     logDebug("narration end");
   }
 }
 
 export async function stopAudio(): Promise<void> {
+  stopBed();
   if (currentPlayer) {
     currentPlayer.pause();
     currentPlayer.remove();

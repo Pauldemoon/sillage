@@ -35,7 +35,9 @@ const JOURNEY_TTL_DAYS = 120;
 //                   (le modèle imitait la longueur des narrations précédentes)
 //                   + compression de montage si dépassement >10%. Les voyages
 //                   v5 (budgets explosés, sortie sans graine) expirent seuls.
-const PIPELINE_VERSION = "v6";
+// v7 (2026-06-10) : titres d'émission NOMINAUX (2-5 mots, ancrage concret) —
+//                   fini les « Quand… / Le jour où… » dramatiques.
+const PIPELINE_VERSION = "v7";
 
 function seedKey(title: string, artist: string): string {
   return `${PIPELINE_VERSION}:${cacheKey(title, artist)}`;
