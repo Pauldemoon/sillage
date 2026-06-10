@@ -5,12 +5,18 @@ import {
   ApiConfig,
 } from "react-native-spotify-remote";
 import { logDebug, logError } from "./debug";
+import { BACKEND } from "./api";
 
 const spotifyConfig: ApiConfig = {
-  clientID: process.env.EXPO_PUBLIC_SPOTIFY_CLIENT_ID!,
+  // Le clientID Spotify est une valeur publique (déjà dans eas.json) : on la
+  // met en dur en filet, sinon un bundle sans env donnait un login cassé
+  // (clientID undefined — vu sur le tout premier build).
+  clientID:
+    process.env.EXPO_PUBLIC_SPOTIFY_CLIENT_ID ||
+    "1321be8fccd049babb9d281004b586ad",
   redirectURL: "sillage://spotify-auth",
-  tokenRefreshURL: `${process.env.EXPO_PUBLIC_BACKEND_URL}/api/spotify/refresh`,
-  tokenSwapURL: `${process.env.EXPO_PUBLIC_BACKEND_URL}/api/spotify/swap`,
+  tokenRefreshURL: `${BACKEND}/api/spotify/refresh`,
+  tokenSwapURL: `${BACKEND}/api/spotify/swap`,
   scopes: [
     ApiScope.AppRemoteControlScope,
     ApiScope.UserReadCurrentlyPlayingScope,
