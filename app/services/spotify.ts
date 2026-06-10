@@ -9,6 +9,7 @@ import { logDebug, logError } from "./debug";
 import { BACKEND } from "./api";
 
 const SPOTIFY_API = "https://api.spotify.com/v1";
+const PLAYBACK_STATE_TIMEOUT_MS = 2500;
 
 const spotifyConfig: ApiConfig = {
   // Le clientID Spotify est une valeur publique (déjà dans eas.json) : on la
@@ -63,6 +64,16 @@ function sameUri(a?: string, b?: string): boolean {
 
 function statusOf(e: unknown): number | undefined {
   return axios.isAxiosError(e) ? e.response?.status : undefined;
+}
+
+function isNetworkIssue(e: unknown): boolean {
+  return (
+    axios.isAxiosError(e) &&
+    !e.response &&
+    (e.code === "ECONNABORTED" ||
+      e.message === "Network Error" ||
+      e.message.toLowerCase().includes("timeout"))
+  );
 }
 
 function sleep(ms: number): Promise<void> {
@@ -148,7 +159,7 @@ async function getPlaybackState(): Promise<WebPlaybackState | null> {
     const res = await axios.get(`${SPOTIFY_API}/me/player`, {
       headers: { Authorization: `Bearer ${t}` },
       validateStatus: (status) => status === 200 || status === 204,
-      timeout: 10000,
+      timeout: PLAYBACK_STATE_TIMEOUT_MS,
     });
     return res.status === 204 ? null : (res.data as WebPlaybackState);
   });
@@ -275,7 +286,11 @@ async function waitForExpectedTrack(spotifyUri: string): Promise<boolean> {
         return true;
       }
     } catch (e) {
-      logError("web state", e);
+      if (isNetworkIssue(e)) {
+        logDebug("web state indisponible, vérification locale…");
+      } else {
+        logError("web state", e);
+      }
     }
     await sleep(900);
   }
@@ -338,7 +353,11 @@ export async function waitForTrackEnd(
       }
     } catch (e) {
       webFailures += 1;
-      logError("waitForTrackEnd web", e);
+      if (isNetworkIssue(e)) {
+        logDebug("Spotify state indisponible, horloge locale active");
+      } else {
+        logError("waitForTrackEnd web", e);
+      }
       if (statusOf(e) === 401) accessToken = null;
     }
   }
