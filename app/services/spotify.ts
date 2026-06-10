@@ -1,3 +1,4 @@
+import axios from "axios";
 import {
   auth as SpotifyAuth,
   remote as SpotifyRemote,
@@ -7,10 +8,11 @@ import {
 import { logDebug, logError } from "./debug";
 import { BACKEND } from "./api";
 
+const SPOTIFY_API = "https://api.spotify.com/v1";
+
 const spotifyConfig: ApiConfig = {
   // Le clientID Spotify est une valeur publique (déjà dans eas.json) : on la
-  // met en dur en filet, sinon un bundle sans env donnait un login cassé
-  // (clientID undefined — vu sur le tout premier build).
+  // met en dur en filet, sinon un bundle sans env donnait un login cassé.
   clientID:
     process.env.EXPO_PUBLIC_SPOTIFY_CLIENT_ID ||
     "1321be8fccd049babb9d281004b586ad",
@@ -20,132 +22,154 @@ const spotifyConfig: ApiConfig = {
   scopes: [
     ApiScope.AppRemoteControlScope,
     ApiScope.UserReadCurrentlyPlayingScope,
+    ApiScope.UserReadPlaybackStateScope,
+    ApiScope.UserModifyPlaybackStateScope,
   ],
-  // Wake the Spotify app on authorization so SPTAppRemote can attach.
-  // Without this, a "cold" Spotify refuses the App Remote socket
-  // ("Connection refused"). "" resumes the last playback to activate it.
+  // Réveille Spotify pendant l'autorisation. Après ça, le pilotage de
+  // l'émission passe par la Web API, plus par la socket App Remote.
   playURI: "",
 };
 
-let connected = false;
-let listenersInstalled = false;
-// On garde le dernier token pour pouvoir reconnecter l'App Remote sans
-// relancer tout le flux OAuth : Spotify coupe la socket dès que la lecture
-// s'arrête (fin de file), ce qui faisait échouer le morceau suivant
-// ("player is not ready").
-let lastAccessToken: string | null = null;
-let reconnecting: Promise<void> | null = null;
+let accessToken: string | null = null;
+let remoteWakeInFlight: Promise<void> | null = null;
 
-function installRemoteListeners(): void {
-  if (listenersInstalled) return;
-  listenersInstalled = true;
-  SpotifyRemote.on("remoteDisconnected", () => {
-    connected = false;
-    logDebug("remoteDisconnected");
+interface WebPlaybackState {
+  is_playing?: boolean;
+  progress_ms?: number;
+  item?: {
+    uri?: string;
+    name?: string;
+    duration_ms?: number;
+  } | null;
+  device?: {
+    id?: string | null;
+    is_active?: boolean;
+    is_restricted?: boolean;
+    name?: string;
+    type?: string;
+  } | null;
+}
+
+function sameUri(a?: string, b?: string): boolean {
+  return !!a && !!b && a.split("#")[0] === b.split("#")[0];
+}
+
+function statusOf(e: unknown): number | undefined {
+  return axios.isAxiosError(e) ? e.response?.status : undefined;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function authorize(label: string): Promise<string> {
+  logDebug(`${label}: Spotify authorize…`);
+  const session = await SpotifyAuth.authorize(spotifyConfig);
+  accessToken = session.accessToken;
+  logDebug(`authorize OK (token ${session.accessToken?.slice(0, 6)}…)`);
+  return accessToken;
+}
+
+async function token(label = "spotify"): Promise<string> {
+  if (accessToken) return accessToken;
+  return authorize(label);
+}
+
+async function wakeSpotifyApp(label: string): Promise<void> {
+  if (remoteWakeInFlight) return remoteWakeInFlight;
+  remoteWakeInFlight = (async () => {
+    const t = await token(label);
+    try {
+      logDebug(`${label}: wake Remote…`);
+      await SpotifyRemote.connect(t);
+      logDebug(`${label}: Remote wake OK`);
+    } catch (e) {
+      // Ce n'est plus le moteur de lecture : un échec Remote ne bloque pas
+      // l'émission si Spotify Connect est disponible côté Web API.
+      logError(`${label}: Remote wake ignored`, e);
+    }
+  })().finally(() => {
+    remoteWakeInFlight = null;
   });
-  SpotifyRemote.on("remoteConnected", () => {
-    connected = true;
-    logDebug("remoteConnected");
+  return remoteWakeInFlight;
+}
+
+async function spotifyRequest<T>(
+  label: string,
+  run: (t: string) => Promise<T>,
+): Promise<T> {
+  try {
+    return await run(await token(label));
+  } catch (e) {
+    if (statusOf(e) !== 401) throw e;
+    logDebug(`${label}: token expiré, réautorisation…`);
+    accessToken = null;
+    return run(await authorize(label));
+  }
+}
+
+async function getPlaybackState(): Promise<WebPlaybackState | null> {
+  return spotifyRequest("web state", async (t) => {
+    const res = await axios.get(`${SPOTIFY_API}/me/player`, {
+      headers: { Authorization: `Bearer ${t}` },
+      validateStatus: (status) => status === 200 || status === 204,
+      timeout: 10000,
+    });
+    return res.status === 204 ? null : (res.data as WebPlaybackState);
   });
 }
 
-// L'App Remote refuse souvent la socket JUSTE après l'autorisation, le temps
-// que l'app Spotify se réveille et accepte le transport ("Connection refused" /
-// "ensure Spotify app is installed and try to reconnect"). Plutôt qu'échouer du
-// premier coup, on retente quelques fois avec un court délai : l'autorisation a
-// réveillé Spotify, il lui faut juste une ou deux secondes pour être prêt.
-async function connectWithRetry(token: string, label: string): Promise<void> {
-  const MAX = 5;
-  for (let attempt = 1; attempt <= MAX; attempt++) {
-    try {
-      await SpotifyRemote.connect(token);
-      connected = true;
-      logDebug(`${label} OK ✅ (tentative ${attempt})`);
-      return;
-    } catch (e) {
-      logError(`${label} tentative ${attempt}/${MAX}`, e);
-      if (attempt === MAX) {
-        throw new Error(
-          "Spotify n'a pas répondu. Ouvre l'app Spotify, lance un morceau, puis réessaie (compte Premium requis).",
-        );
-      }
-      await new Promise((r) => setTimeout(r, 1500));
-    }
+async function getActiveDeviceId(): Promise<string | undefined> {
+  const state = await getPlaybackState().catch(() => null);
+  if (state?.device?.id && !state.device.is_restricted) {
+    logDebug(
+      `device: ${state.device.name || "?"} (${state.device.type || "?"})`,
+    );
+    return state.device.id;
   }
+
+  return spotifyRequest("web devices", async (t) => {
+    const res = await axios.get(`${SPOTIFY_API}/me/player/devices`, {
+      headers: { Authorization: `Bearer ${t}` },
+      timeout: 10000,
+    });
+    const devices = (res.data?.devices || []) as Array<{
+      id?: string;
+      is_active?: boolean;
+      is_restricted?: boolean;
+      name?: string;
+      type?: string;
+    }>;
+    const device =
+      devices.find((d) => d.is_active && !d.is_restricted) ||
+      devices.find((d) => !d.is_restricted);
+    if (device?.id) {
+      logDebug(`device: ${device.name || "?"} (${device.type || "?"})`);
+    } else {
+      logDebug("⚠️ aucun device Spotify Connect disponible");
+    }
+    return device?.id;
+  });
+}
+
+async function webPlay(spotifyUri: string): Promise<void> {
+  const deviceId = await getActiveDeviceId();
+  await spotifyRequest("web play", async (t) => {
+    await axios.put(
+      `${SPOTIFY_API}/me/player/play`,
+      { uris: [spotifyUri], position_ms: 0 },
+      {
+        headers: { Authorization: `Bearer ${t}` },
+        params: deviceId ? { device_id: deviceId } : undefined,
+        timeout: 10000,
+      },
+    );
+  });
 }
 
 export async function connectSpotify(): Promise<void> {
-  installRemoteListeners();
-  if (connected) {
-    try {
-      if (await SpotifyRemote.isConnectedAsync()) return;
-    } catch {
-      // on retombe sur une autorisation fraîche
-    }
-    connected = false;
-  }
-  await authorizeAndConnect("connectSpotify");
-}
-
-async function authorizeAndConnect(label: string): Promise<void> {
-  logDebug(`${label}: authorize…`);
-  const session = await SpotifyAuth.authorize(spotifyConfig);
-  lastAccessToken = session.accessToken;
-  logDebug(`authorize OK (token ${session.accessToken?.slice(0, 6)}…), connect…`);
-  await connectWithRetry(session.accessToken, "connect");
-}
-
-async function forceReconnect(label: string): Promise<void> {
-  if (reconnecting) return reconnecting;
-  reconnecting = (async () => {
-    connected = false;
-    try {
-      await SpotifyRemote.disconnect();
-    } catch {
-      // déjà déconnecté
-    }
-    if (lastAccessToken) {
-      try {
-        logDebug(`${label}: reconnect token…`);
-        await connectWithRetry(lastAccessToken, "reconnect");
-        return;
-      } catch (e) {
-        logError(`${label}: token reconnect failed`, e);
-      }
-    }
-    await authorizeAndConnect(label);
-  })().finally(() => {
-    reconnecting = null;
-  });
-  return reconnecting;
-}
-
-// Garantit une App Remote vivante avant toute commande de lecture. Si la
-// socket est tombée (fin de morceau, app Spotify mise en veille...), on la
-// rouvre avec le token déjà obtenu.
-async function ensureConnected(forceFreshAuth = false): Promise<void> {
-  installRemoteListeners();
-  if (forceFreshAuth) {
-    await authorizeAndConnect("fresh reconnect");
-    return;
-  }
-
-  let isConn = false;
-  try {
-    isConn = await SpotifyRemote.isConnectedAsync();
-  } catch (e) {
-    logError("isConnectedAsync", e);
-  }
-  logDebug(`ensureConnected: isConnected=${isConn}`);
-  if (isConn) {
-    connected = true;
-    return;
-  }
-  if (lastAccessToken) {
-    await forceReconnect("ensureConnected");
-  } else {
-    await authorizeAndConnect("ensureConnected");
-  }
+  await authorize("connectSpotify");
+  await wakeSpotifyApp("connectSpotify");
 }
 
 export async function playTrack(spotifyUri: string): Promise<void> {
@@ -153,23 +177,23 @@ export async function playTrack(spotifyUri: string): Promise<void> {
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      await ensureConnected(attempt === 3);
-      logDebug(`playUri ${spotifyUri.slice(0, 28)}… tentative ${attempt}`);
-      await SpotifyRemote.playUri(spotifyUri);
-
-      // Spotify peut accepter la commande avant d'avoir réellement basculé de
-      // morceau. On attend le bon URI, sinon l'enchaînement se cale sur
-      // l'ancien titre et la suite part de travers.
+      logDebug(`web play ${spotifyUri.slice(0, 28)}… tentative ${attempt}`);
+      await webPlay(spotifyUri);
       if (await waitForExpectedTrack(spotifyUri)) return;
-
-      lastError = new Error("Spotify n'a pas confirmé le morceau demandé");
-      logDebug("⚠️ playUri non confirmé");
+      lastError = new Error("Spotify Web API n'a pas confirmé le morceau");
+      logDebug("⚠️ web play non confirmé");
     } catch (e) {
       lastError = e;
-      logError(`playUri tentative ${attempt}`, e);
+      logError(`web play tentative ${attempt}`, e);
+      const status = statusOf(e);
+      if (status === 401) accessToken = null;
     }
 
-    await forceReconnect(`playUri retry ${attempt}`);
+    // Si aucun device actif n'a pris la commande, on réveille Spotify puis on
+    // retente en HTTP. La socket Remote ne sert pas à enchaîner les titres.
+    await wakeSpotifyApp(`web play retry ${attempt}`);
+    if (attempt === 2) accessToken = null;
+    await sleep(1200);
   }
 
   throw lastError instanceof Error
@@ -178,44 +202,44 @@ export async function playTrack(spotifyUri: string): Promise<void> {
 }
 
 export async function pauseTrack(): Promise<void> {
-  await SpotifyRemote.pause();
+  await spotifyRequest("web pause", async (t) => {
+    await axios.put(
+      `${SPOTIFY_API}/me/player/pause`,
+      {},
+      { headers: { Authorization: `Bearer ${t}` }, timeout: 10000 },
+    );
+  });
 }
 
 export async function resumeTrack(): Promise<void> {
-  await ensureConnected();
-  try {
-    await SpotifyRemote.resume();
-  } catch (e) {
-    logError("resume", e);
-    await forceReconnect("resume");
-    await SpotifyRemote.resume();
-  }
-}
-
-function sameUri(a?: string, b?: string): boolean {
-  return !!a && !!b && a.split("#")[0] === b.split("#")[0];
+  await spotifyRequest("web resume", async (t) => {
+    await axios.put(
+      `${SPOTIFY_API}/me/player/play`,
+      {},
+      { headers: { Authorization: `Bearer ${t}` }, timeout: 10000 },
+    );
+  });
 }
 
 async function waitForExpectedTrack(spotifyUri: string): Promise<boolean> {
-  const deadline = Date.now() + 8000;
+  const deadline = Date.now() + 10000;
   while (Date.now() < deadline) {
     try {
-      const st: any = await SpotifyRemote.getPlayerState();
-      const uri = st?.track?.uri;
+      const st = await getPlaybackState();
+      const uri = st?.item?.uri;
       logDebug(
-        `state: "${st?.track?.name ?? "?"}" paused=${st?.isPaused} pos=${st?.playbackPosition}`,
+        `web state: "${st?.item?.name ?? "?"}" playing=${st?.is_playing} pos=${st?.progress_ms}`,
       );
-      if (sameUri(uri, spotifyUri) && !st?.isPaused) return true;
+      if (sameUri(uri, spotifyUri) && st?.is_playing) return true;
     } catch (e) {
-      logError("getPlayerState", e);
-      await ensureConnected();
+      logError("web state", e);
     }
-    await new Promise((r) => setTimeout(r, 800));
+    await sleep(900);
   }
   return false;
 }
 
-// Attend la fin réelle du morceau depuis l'état Spotify, mais rend la main
+// Attend la fin réelle du morceau depuis Spotify Connect, mais rend la main
 // `leadMs` AVANT la fin pour lancer la narration suivante sans blanc.
 export async function waitForTrackEnd(
   durationMs: number,
@@ -227,38 +251,36 @@ export async function waitForTrackEnd(
   let stagnantTicks = 0;
 
   while (Date.now() < fallbackDeadline) {
-    await new Promise((r) => setTimeout(r, 1000));
+    await sleep(1200);
     try {
-      await ensureConnected();
-      const st: any = await SpotifyRemote.getPlayerState();
-      const trackDuration = st?.track?.duration || durationMs;
-      const position = Number(st?.playbackPosition || 0);
-      const currentUri = st?.track?.uri;
+      const st = await getPlaybackState();
+      const trackDuration = st?.item?.duration_ms || durationMs;
+      const position = Number(st?.progress_ms || 0);
+      const currentUri = st?.item?.uri;
 
       if (spotifyUri && currentUri && !sameUri(currentUri, spotifyUri)) {
         logDebug("track changed externally, on enchaîne");
         return;
       }
 
-      if (!st?.isPaused) {
+      if (st?.is_playing) {
         stagnantTicks = position <= lastPosition + 250 ? stagnantTicks + 1 : 0;
         lastPosition = position;
       }
 
       const remaining = trackDuration - position;
-      if (remaining <= leadMs + 750) {
+      if (remaining <= leadMs + 900) {
         logDebug(`track end: remaining=${Math.max(0, remaining)}ms`);
         return;
       }
 
-      // Si Spotify dit "pas en pause" mais que la position ne bouge plus, on
-      // ne bloque pas l'émission indéfiniment.
-      if (!st?.isPaused && stagnantTicks >= 8) {
+      if (st?.is_playing && stagnantTicks >= 8) {
         logDebug("⚠️ position figée, on enchaîne");
         return;
       }
     } catch (e) {
-      logError("waitForTrackEnd", e);
+      logError("waitForTrackEnd web", e);
+      if (statusOf(e) === 401) accessToken = null;
     }
   }
 
@@ -267,5 +289,4 @@ export async function waitForTrackEnd(
 
 export function disconnectSpotify(): void {
   SpotifyRemote.disconnect();
-  connected = false;
 }
