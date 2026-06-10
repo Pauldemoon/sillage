@@ -19,7 +19,7 @@ const SYSTEM_PROMPT = `Tu es le réalisateur final d'une émission de radio musi
 RÈGLES DURES :
 - Tu n'ajoutes AUCUN fait, nom, date, chiffre ou citation qui ne soit déjà dans les narrations fournies. Tu réorganises, tu varies, tu coupes — tu n'inventes pas.
 - Tu modifies le MOINS possible : une narration sans défaut d'ensemble est rendue TELLE QUELLE, au caractère près.
-- Chaque narration garde son format ample (environ 150 à 200 mots) : tu ne la raccourcis JAMAIS pour gagner des mots, tu retouches seulement entrées/chutes/redites. Elle reste orale, au tutoiement, et sa dernière phrase doit pouvoir précéder directement le morceau qui arrive.
+- Chaque narration vise environ 130 à 160 mots. Tu ne la raccourcis pas pour gagner des mots, MAIS si elle tourne en rond (une idée redite, une conclusion qui répète le récit), tu coupes le passage redondant. Elle reste orale, au tutoiement, et sa dernière phrase doit pouvoir précéder directement le morceau qui arrive.
 - Même nombre de narrations, même ordre.
 
 ${FRENCH_STYLE_RULES}

@@ -21,6 +21,16 @@ async function ensureBucket(
   bucketReady = true;
 }
 
+// L'audio peut être du MP3 (OpenAI) ou du WAV (Gemini, PCM emballé). On lit
+// les octets de tête pour étiqueter correctement le fichier — un WAV servi
+// en audio/mpeg ne se lit pas dans l'app.
+function audioFormat(buf: Buffer): { ext: string; contentType: string } {
+  if (buf.length >= 4 && buf.toString("ascii", 0, 4) === "RIFF") {
+    return { ext: "wav", contentType: "audio/wav" };
+  }
+  return { ext: "mp3", contentType: "audio/mpeg" };
+}
+
 export async function uploadNarrationAudio(
   buf: Buffer,
 ): Promise<string | null> {
@@ -29,10 +39,11 @@ export async function uploadNarrationAudio(
 
   try {
     await ensureBucket(client);
-    const path = `${createHash("sha1").update(buf).digest("hex")}.mp3`;
+    const { ext, contentType } = audioFormat(buf);
+    const path = `${createHash("sha1").update(buf).digest("hex")}.${ext}`;
     const { error } = await client.storage
       .from(BUCKET)
-      .upload(path, buf, { contentType: "audio/mpeg", upsert: true });
+      .upload(path, buf, { contentType, upsert: true });
     if (error) {
       console.error("[storage] narration upload failed:", error.message);
       return null;

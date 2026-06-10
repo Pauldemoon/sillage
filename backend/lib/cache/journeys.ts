@@ -20,7 +20,10 @@ const JOURNEY_TTL_DAYS = 120;
 // prompt, golden-set) : les anciennes lignes ne matchent plus et expirent
 // d'elles-mêmes, sans toucher à la table.
 // v2 (2026-06-10) : narration séquentielle + few-shot + relecture d'épisode.
-const PIPELINE_VERSION = "v2";
+// v3 (2026-06-10) : narration resserrée (130-160 mots, anti-radotage) + voix
+//                   Gemini. Les voyages v2 (longs/circulaires) ne sont plus
+//                   resservis et expirent seuls.
+const PIPELINE_VERSION = "v3";
 
 function seedKey(title: string, artist: string): string {
   return `${PIPELINE_VERSION}:${cacheKey(title, artist)}`;

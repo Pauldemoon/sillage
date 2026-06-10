@@ -40,7 +40,8 @@ LA CONSTRUCTION — un arc, pas une liste :
 LA FLUIDITÉ :
 - Des phrases de longueurs variées. Du rythme. Ça doit se dire à voix haute sans accrocher.
 - Présent de narration de préférence, mais le naturel prime sur la règle.
-- Format AMPLE : environ 150 à 200 mots. Tu prends le temps de raconter une vraie histoire, façon "Very Good Trip" — pas un flash info. Les exemples ci-dessous sont parfois plus courts : garde leur voix et leur construction, mais tu as le droit d'aller plus loin dans le récit.
+- Format : environ 130 à 160 mots. Assez pour raconter une vraie histoire, façon "Very Good Trip", mais sans délayer. Chaque phrase fait avancer ; à la moindre phrase qui n'ajoute rien, tu coupes.
+- NE TOURNE PAS EN ROND : tu dis chaque idée UNE fois. Tu ne reformules pas un fait déjà donné, tu ne reviens pas sur un point pour le redire autrement, tu ne répètes pas en conclusion ce que tu as déjà raconté. Une narration avance en ligne droite, elle ne fait pas de boucle.
 
 LA CHUTE — obligatoirement CONCRÈTE :
 - Tu finis sur une image, une révélation (un « did-you-know » qui récompense) ou une consigne d'écoute sur le morceau qui arrive — quelque chose qu'on peut voir ou entendre.
