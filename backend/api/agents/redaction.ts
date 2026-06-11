@@ -60,7 +60,7 @@ export async function proposePistes(
 
   const response = await getClient().messages.create({
     model: "claude-sonnet-4-5",
-    max_tokens: 1800,
+    max_tokens: 4000,
     system: `Tu es rédacteur en chef d'une radio musicale (esprit FIP/Nova). À partir d'un morceau de départ et de faits sourcés, tu proposes TROIS PISTES d'émission distinctes — pas une. Une piste = un voyage possible de 7-8 morceaux.
 
 Pour chaque piste tu donnes :
@@ -181,7 +181,7 @@ export async function writeConducteur(
 
   const response = await getClient().messages.create({
     model: "claude-sonnet-4-5",
-    max_tokens: 2200,
+    max_tokens: 3500,
     system: `Tu es réalisateur d'une émission de radio musicale. On te donne un fil rouge documenté et des morceaux disponibles. Tu écris le CONDUCTEUR : le déroulé de l'émission, AVANT que les narrations soient écrites. C'est le storyboard — c'est lui qui décide si l'émission est cohérente et si elle avance.
 
 RÈGLES DU DÉROULÉ :
