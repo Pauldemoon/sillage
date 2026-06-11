@@ -1,7 +1,17 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { randomUUID } from "crypto";
-import { generateAngle } from "./agents/angle";
+import { generateAngle, ARCHETYPES } from "./agents/angle";
 import { buildPlaylist } from "./agents/playlist";
+import {
+  proposePistes,
+  choosePiste,
+  writeConducteur,
+  type Conducteur,
+  type ConducteurSlot,
+  type PisteCandidate,
+  type Reperage,
+} from "./agents/redaction";
+import { fetchTavily } from "../lib/sources/tavily";
 import { generateNarration, fitNarrationToBudget } from "./agents/narration";
 import { generateTeaser } from "./agents/teaser";
 import { verifyNarration } from "./agents/verify";
@@ -16,7 +26,11 @@ import { planBroadcast } from "./agents/producer";
 import { planPacing, countWords } from "../lib/editorial/pacing";
 import { researchArtist, type SourcedFact } from "../lib/research";
 import { uploadNarrationAudio } from "../lib/storage";
-import { findBestTrackMatch, type SpotifyTrack } from "../lib/spotify";
+import {
+  findBestTrackMatch,
+  searchTracks,
+  type SpotifyTrack,
+} from "../lib/spotify";
 import {
   buildMemoryPatch,
   buildMemoryProfile,
@@ -572,26 +586,47 @@ async function runHandler(
     const seedResearch = await researchArtist(title, artist);
     _lap("seedResearch");
 
-    // Agent 1 — angle éditorial basé sur des faits réels.
-    // On évite les archétypes déjà servis à cet auditeur pour cette graine.
-    const { angle, description, archetype } = await generateAngle(
-      title,
-      artist,
-      seedResearch.facts,
-      heardArchetypesFor(journeyCandidates, heardJourneys),
-    );
-    _lap("angle");
+    // --- LA SALLE DE RÉDACTION ------------------------------------------
+    // Trois pistes tirées des faits → repérage (matière documentaire +
+    // résolution Spotify des candidats) → choix de la piste la mieux
+    // DOCUMENTÉE → CONDUCTEUR : le déroulé écrit AVANT les narrations.
+    // Toute panne de rédaction replie sur l'ancien chemin (angle unique +
+    // playlist) : une émission sort toujours.
+    const candidatePool = buildCandidatePool(journeyCandidates);
+    const avoidArchetypes = heardArchetypesFor(journeyCandidates, heardJourneys);
 
-    // Teaser : hors chemin critique — texte (Haiku) + voix + upload pendant
-    // que la playlist et la recherche tournent. S'il échoue, tant pis : la
-    // génération continue, l'app n'aura juste pas de promesse anticipée.
-    if (hooks?.onTeaser) {
+    // La graine d'abord : pré-résolue par l'app, sinon match strict, sinon
+    // repêchage limité au même artiste. Sans elle, pas d'émission.
+    const seedTrackResolved =
+      preResolvedSeed ||
+      (await findBestTrackMatch(title, artist).catch(() => null)) ||
+      (await searchTracks(`${title} ${artist}`, 5).catch(() => [])).find((t) =>
+        sameArtist(t.artist, artist),
+      );
+    if (!seedTrackResolved) {
+      throw new Error(
+        `Morceau de départ introuvable sur Spotify : "${title}" de ${artist}`,
+      );
+    }
+
+    let angle = "";
+    let description = "";
+    let archetype = "fil";
+    let conducteur: Conducteur | null = null;
+    let conducteurTracks: SpotifyTrack[] | null = null;
+
+    // Teaser : hors chemin critique, tiré dès que le sujet est connu (une
+    // seule fois, quel que soit le chemin qui l'a déterminé).
+    let teaserFired = false;
+    const fireTeaser = (teaserAngle: string, teaserDescription: string) => {
+      if (teaserFired || !hooks?.onTeaser) return;
+      teaserFired = true;
       const publishTeaser = hooks.onTeaser;
       (async () => {
         try {
           const text = await generateTeaser(
-            angle,
-            description,
+            teaserAngle,
+            teaserDescription,
             title,
             artist,
             seedResearch.facts,
@@ -605,20 +640,144 @@ async function runHandler(
           console.error("teaser:", err);
         }
       })();
+    };
+
+    try {
+      const pistes = await proposePistes(
+        title,
+        artist,
+        seedResearch.facts,
+        avoidArchetypes,
+        candidatePool,
+      );
+      if (!pistes.length) throw new Error("aucune piste proposée");
+      _lap("pistes");
+
+      // Repérage : pour chaque piste, la matière documentaire (Tavily sur le
+      // FIL, pas sur un titre) et la disponibilité réelle des candidats.
+      const reperages: Reperage[] = await Promise.all(
+        pistes.map(async (piste) => {
+          const [matterArrays, resolvedRaw] = await Promise.all([
+            Promise.all(
+              (piste.requetes || [])
+                .slice(0, 2)
+                .map((q) =>
+                  fetchTavily(title, artist, undefined, q).catch(() => []),
+                ),
+            ),
+            Promise.all(
+              (piste.candidats || []).slice(0, 10).map(async (candidate) => {
+                const track = await findBestTrackMatch(
+                  candidate.title,
+                  candidate.artist,
+                ).catch(() => null);
+                return track ? { candidate, track } : null;
+              }),
+            ),
+          ]);
+          const matter = matterArrays
+            .flat()
+            .map((s) => `[${s.source}] ${s.content.slice(0, 1200)}`)
+            .join("\n\n");
+          const resolved = resolvedRaw.filter(
+            (
+              x,
+            ): x is { candidate: PisteCandidate; track: SpotifyTrack } =>
+              x !== null,
+          );
+          return { piste, matter, resolved };
+        }),
+      );
+      _lap("reperage");
+
+      const chosen = reperages[await choosePiste(title, artist, reperages)];
+      angle = chosen.piste.enonce;
+      description = chosen.piste.description;
+      archetype = ARCHETYPES[chosen.piste.archetype]
+        ? chosen.piste.archetype
+        : "fil";
+      fireTeaser(angle, description);
+
+      conducteur = await writeConducteur(
+        seedTrackResolved,
+        chosen,
+        seedResearch.facts,
+      );
+      _lap("conducteur");
+
+      if (conducteur) {
+        const cond = conducteur;
+        angle = cond.enonce || angle;
+        description = cond.description || description;
+
+        // Matérialiser la tracklist du conducteur : chaque slot retrouve son
+        // titre résolu au repérage. Un slot sans titre réel saute.
+        const isDisliked = (a: string) =>
+          memoryProfile.dislikedArtists.some((d) => sameArtist(d, a));
+        const picked: SpotifyTrack[] = [seedTrackResolved];
+        const keptSlots: ConducteurSlot[] = [];
+        for (const slot of cond.slots) {
+          const match =
+            chosen.resolved.find(
+              (x) =>
+                normalize(x.track.title) === normalize(slot.title) &&
+                sameArtist(x.track.artist, slot.artist),
+            ) ||
+            chosen.resolved.find(
+              (x) =>
+                sameArtist(x.track.artist, slot.artist) &&
+                normalize(x.track.title).includes(normalize(slot.title)),
+            );
+          if (!match) continue;
+          if (isDisliked(match.track.artist)) continue;
+          if (picked.some((t) => sameArtist(t.artist, match.track.artist)))
+            continue;
+          picked.push(match.track);
+          keptSlots.push(slot);
+          if (picked.length >= 8) break;
+        }
+        if (picked.length >= 4) {
+          conducteur = { ...cond, slots: keptSlots };
+          conducteurTracks = picked;
+        } else {
+          console.error(
+            `conducteur : ${picked.length} titres matérialisés seulement — repli`,
+          );
+          conducteur = null;
+        }
+      }
+    } catch (err) {
+      console.error("salle de rédaction, repli sur l'ancien chemin :", err);
+      conducteur = null;
+      conducteurTracks = null;
     }
 
-    // Agent 2 — playlist (nourrie du pool de candidats validés, Layer 2)
-    const candidatePool = buildCandidatePool(journeyCandidates);
-    const tracks = await buildPlaylist(
-      title,
-      artist,
-      angle,
-      description,
-      seedResearch.facts,
-      memoryProfile,
-      candidatePool,
-      preResolvedSeed,
-    );
+    // --- Repli : ancien chemin (angle unique + playlist) ------------------
+    let tracks: SpotifyTrack[];
+    if (conducteurTracks) {
+      tracks = conducteurTracks;
+    } else {
+      const fallback = await generateAngle(
+        title,
+        artist,
+        seedResearch.facts,
+        avoidArchetypes,
+      );
+      angle = fallback.angle;
+      description = fallback.description;
+      archetype = fallback.archetype;
+      fireTeaser(angle, description);
+      tracks = await buildPlaylist(
+        title,
+        artist,
+        angle,
+        description,
+        seedResearch.facts,
+        memoryProfile,
+        candidatePool,
+        seedTrackResolved,
+      );
+    }
 
     if (tracks.length === 0) {
       throw new Error("No Spotify tracks found for generated playlist");
@@ -627,14 +786,32 @@ async function runHandler(
 
     const initialDossiers = await buildDossiers(tracks, seedResearch);
     _lap("buildDossiers");
-    const { dossiers, summaries: editorialSummaries } = await curateDossiers(
-      title,
-      artist,
-      angle,
-      description,
-      initialDossiers,
-      memoryProfile,
-    );
+
+    // Avec conducteur, les rôles éditoriaux viennent du déroulé — la passe
+    // de review playlist devient redondante, on l'économise.
+    let dossiers: TrackDossier[];
+    let editorialSummaries: string[];
+    if (conducteur) {
+      const cond = conducteur;
+      dossiers = initialDossiers.map((dossier, index) => ({
+        ...dossier,
+        editorialRole: index === 0 ? "ouverture" : `étape ${index}`,
+        editorialReason:
+          index === 0 ? cond.question : cond.slots[index - 1]?.pont,
+      }));
+      editorialSummaries = [cond.description, cond.question].filter(Boolean);
+    } else {
+      const curated = await curateDossiers(
+        title,
+        artist,
+        angle,
+        description,
+        initialDossiers,
+        memoryProfile,
+      );
+      dossiers = curated.dossiers;
+      editorialSummaries = curated.summaries;
+    }
     _lap("curateDossiers");
     const curatedTracks = dossiers.map((dossier) => dossier.track);
     const broadcastPlan = planBroadcast(curatedTracks);
@@ -660,6 +837,26 @@ async function runHandler(
     const verifications: Promise<void>[] = [];
     for (let i = narrationStartIndex; i < curatedTracks.length; i++) {
       const pacingSlot = pacingPlan[i - narrationStartIndex];
+
+      // Mission du conducteur : le pont décidé d'avance, ce que cette étape
+      // doit révéler, et la question de l'émission (plantée au lancement,
+      // payée à la sortie).
+      let conducteurNote: string | undefined;
+      if (conducteur) {
+        const slot = conducteur.slots[i - 1];
+        if (slot) {
+          conducteurNote = `CONDUCTEUR DE L'ÉMISSION — ta narration exécute ce déroulé :
+- Ta mission à cette étape : ${slot.mission}
+- Le pont avec le morceau précédent (LE fait à raconter) : ${slot.pont}`;
+          if (i === narrationStartIndex && conducteur.question) {
+            conducteurNote += `\n- La question de l'émission, à PLANTER ici sans la résoudre : ${conducteur.question}`;
+          }
+          if (i === curatedTracks.length - 1 && conducteur.question) {
+            conducteurNote += `\n- Dernière narration : la question de l'émission (« ${conducteur.question} ») se PAIE ici — c'est la révélation finale.`;
+          }
+        }
+      }
+
       const draft = await generateNarration(
         curatedTracks,
         angle,
@@ -672,6 +869,7 @@ async function runHandler(
         },
         [...previousDrafts],
         pacingSlot,
+        conducteurNote,
       );
       previousDrafts.push(draft);
 

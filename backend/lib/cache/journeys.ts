@@ -42,7 +42,10 @@ const JOURNEY_TTL_DAYS = 120;
 //                   dicible à l'antenne telle quelle.
 // v9 (2026-06-11) : émissions de 7-8 titres (14 candidats demandés, graine
 //                   insubmersible, cible 8) + deux loupes dans l'horloge.
-const PIPELINE_VERSION = "v9";
+// v10 (2026-06-11) : la SALLE DE RÉDACTION — trois pistes d'angle, repérage
+//                    documenté avant sélection, conducteur (déroulé écrit
+//                    avant les narrations, question plantée/payée).
+const PIPELINE_VERSION = "v10";
 
 function seedKey(title: string, artist: string): string {
   return `${PIPELINE_VERSION}:${cacheKey(title, artist)}`;

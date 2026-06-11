@@ -72,6 +72,9 @@ export async function generateNarration(
   facts: NarrationFacts,
   previousNarrations: string[] = [],
   pacing?: PacingSlot,
+  // Mission issue du conducteur (salle de rédaction) : le pont décidé
+  // d'avance et ce que cette étape doit révéler. La narration EXÉCUTE.
+  conducteurNote?: string,
 ): Promise<string> {
   const currentTrack = tracks[index];
 
@@ -131,7 +134,7 @@ ${
     : "Rien encore, c'est l'ouverture de l'émission."
 }
 
-${
+${conducteurNote ? `${conducteurNote}\n\n` : ""}${
   pacing
     ? `${pacing.brief}
 
