@@ -373,6 +373,7 @@ function startGenerationJob(
   title: string,
   artist: string,
   memory: unknown,
+  seed?: unknown,
 ): string {
   const id = randomUUID();
   jobs.set(id, { status: "pending", ts: Date.now() });
@@ -402,7 +403,7 @@ function startGenerationJob(
 
   Promise.resolve(
     runHandler(
-      { method: "POST", body: { title, artist, memory } } as any,
+      { method: "POST", body: { title, artist, memory, seed } } as any,
       mockRes,
       {
         // Résultat partiel : le teaser est accroché au job pendant qu'il est
@@ -429,7 +430,7 @@ function startGenerationJob(
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).end();
-  const { jobId, title, artist, memory } = req.body || {};
+  const { jobId, title, artist, memory, seed } = req.body || {};
 
   // Poll : l'app interroge un job déjà lancé. Requête courte.
   if (jobId) {
@@ -454,7 +455,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!title || !artist)
     return res.status(400).json({ error: "title and artist required" });
   sweepJobs();
-  const id = startGenerationJob(title, artist, memory);
+  const id = startGenerationJob(title, artist, memory, seed);
   return res.status(200).json({ status: "pending", jobId: id });
 }
 
@@ -472,9 +473,26 @@ async function runHandler(
 ) {
   if (req.method !== "POST") return res.status(405).end();
 
-  const { title, artist, memory } = req.body;
+  const { title, artist, memory, seed } = req.body;
   if (!title || !artist)
     return res.status(400).json({ error: "title and artist required" });
+
+  // Graine pré-résolue par l'app : l'utilisateur a cliqué un VRAI titre
+  // Spotify (uri + durée connus). On la valide et on la transmet telle
+  // quelle — on ne re-cherche jamais un morceau qu'on a déjà.
+  const preResolvedSeed: SpotifyTrack | undefined =
+    seed && typeof seed.spotifyUri === "string" && seed.spotifyUri && seed.id
+      ? {
+          id: String(seed.id),
+          title: String(seed.title || title),
+          artist: String(seed.artist || artist),
+          album: String(seed.album || ""),
+          cover: String(seed.cover || ""),
+          spotifyUri: String(seed.spotifyUri),
+          duration: Number(seed.duration) || 0,
+          previewUrl: null,
+        }
+      : undefined;
 
   // La génération neuve dure ~100 s. La couche réseau d'iOS abandonne une
   // requête restée sans octet ~60 s : on stream donc un espace toutes les 10 s
@@ -599,6 +617,7 @@ async function runHandler(
       seedResearch.facts,
       memoryProfile,
       candidatePool,
+      preResolvedSeed,
     );
 
     if (tracks.length === 0) {

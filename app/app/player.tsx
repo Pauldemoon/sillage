@@ -172,6 +172,7 @@ export default function PlayerScreen() {
         artist,
         memory,
         onTeaser,
+        seedTrack,
       ).then(
         (data) => {
           logDebug(

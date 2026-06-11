@@ -89,13 +89,16 @@ export async function generateEmission(
   // Appelé UNE fois si le backend publie la promesse de Charlie pendant que
   // la génération tourne — l'app la joue par-dessus le morceau de départ.
   onTeaser?: (teaser: Teaser) => void,
+  // La graine telle que cliquée (uri Spotify comprise) : le backend l'utilise
+  // telle quelle au lieu de re-chercher le titre par texte.
+  seed?: EmissionTrack,
 ): Promise<Emission> {
   // 1) Démarrer le job — requête courte, renvoie un jobId immédiatement.
   let start;
   try {
     start = await axios.post(
       `${BACKEND}/api/generate`,
-      { title, artist, memory },
+      { title, artist, memory, seed },
       { timeout: 20000 },
     );
   } catch (e: any) {

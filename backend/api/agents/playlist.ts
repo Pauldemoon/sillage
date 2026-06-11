@@ -37,6 +37,9 @@ export async function buildPlaylist(
   facts: string,
   memory: UserMemoryProfile,
   knownCandidates: { title: string; artist: string }[] = [],
+  // Graine déjà résolue par l'app (l'utilisateur a cliqué un VRAI titre
+  // Spotify, id compris) : on lui fait confiance, on ne re-cherche pas.
+  preResolvedSeed?: SpotifyTrack,
 ): Promise<SpotifyTrack[]> {
   // Layer 2 — pool de candidats validés (dérivé des voyages déjà en cache
   // pour cette graine). Ce sont des morceaux déjà résolus sur Spotify et
@@ -104,7 +107,9 @@ Donne-moi 14 morceaux candidats, classés du plus au moins essentiel à l'angle.
   // parallèle (au lieu d'une boucle séquentielle) pour réduire fortement la
   // latence, puis on applique la déduplication dans l'ordre des suggestions.
   const [seedExact, candidates] = await Promise.all([
-    findBestTrackMatch(title, artist).catch(() => null),
+    preResolvedSeed
+      ? Promise.resolve(preResolvedSeed)
+      : findBestTrackMatch(title, artist).catch(() => null),
     Promise.all(
       suggestions.map((s) =>
         findBestTrackMatch(s.title, s.artist).catch(() => null),
@@ -113,15 +118,20 @@ Donne-moi 14 morceaux candidats, classés du plus au moins essentiel à l'angle.
   ]);
 
   // La graine est SACRÉE : l'utilisateur l'a choisie depuis la recherche
-  // Spotify, elle existe. Si le match strict échoue (titre-code postal,
-  // ponctuation d'artiste…), on prend le meilleur résultat brut plutôt que
-  // de la perdre — une émission sans son morceau de départ n'a pas de sens.
+  // Spotify. Si le match strict échoue, on repêche dans le top 5 UNIQUEMENT
+  // un titre du MÊME artiste — jamais le premier résultat brut (vu en test :
+  // « Submarine Addison Rae » → un titre de DJ Scheme). Sinon, erreur claire :
+  // une émission qui démarre sur le mauvais morceau n'a pas de sens.
   const seed =
     seedExact ||
-    (await searchTracks(`${title} ${artist}`, 1).catch(() => []))[0] ||
+    (await searchTracks(`${title} ${artist}`, 5).catch(() => [])).find((t) =>
+      sameArtist(t.artist, artist),
+    ) ||
     null;
   if (!seed) {
-    throw new Error(`Morceau de départ introuvable sur Spotify : ${title}`);
+    throw new Error(
+      `Morceau de départ introuvable sur Spotify : "${title}" de ${artist}`,
+    );
   }
 
   // Filtre dur : un artiste explicitement rejeté ne doit JAMAIS apparaître,
