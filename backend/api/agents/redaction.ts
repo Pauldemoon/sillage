@@ -39,12 +39,38 @@ function parseJson<T>(raw: string): T {
   ) as T;
 }
 
+// Deux familles de pistes, demandées par deux appels parallèles : un seul
+// appel s'auto-ancre et produit trois variations du même réflexe. En forçant
+// une famille « rester » et une famille « voyager », la diversité est
+// structurelle.
+export type PisteFlavor = "rester" | "voyager" | "contexte";
+
+const FLAVOR_BRIEFS: Record<PisteFlavor, string> = {
+  rester:
+    "Tes pistes RESTENT dans le monde de la graine : la lignée, la scène, l'époque, le label, le studio — la profondeur plutôt que la distance. Trois manières différentes de creuser CHEZ elle.",
+  voyager:
+    "Tes pistes OSENT le voyage : une traversée par étapes documentées (chaîne de samples, filiation de producteurs, migration d'un son d'un pays à l'autre), un aller-retour vers une scène étrangère qui éclaire la graine. La distance est permise — à condition que CHAQUE étape soit un pont factuel. Trois voyages différents.",
+  contexte:
+    "Tes pistes racontent le MOMENT : l'année, le lieu, la bascule culturelle ou technologique dont la graine est un symptôme (une ville à un instant précis, une invention qui change le son, un événement que la musique traverse). La graine est la porte d'entrée d'une époque — les morceaux sont les témoins. Trois moments différents.",
+};
+
+// La doctrine de la piste — distillée de la skill sillage-redaction (le
+// maître-document, .claude/skills/sillage-redaction). Remplace l'ancienne
+// banque de 100 recettes auto-générées.
+const PISTE_DOCTRINE = `CE QUI FAIT UNE BONNE PISTE (doctrine maison) :
+- Elle part d'un FAIT qui pique trouvé dans le dossier — jamais d'un thème (« la pop des années 2010 » n'est pas une piste, « le beat refusé par Booba » en est une).
+- Elle contient une QUESTION à laquelle l'émission répond — quelque chose qu'on a vraiment envie de savoir, dicible à un ami en une phrase.
+- Elle implique un VOYAGE qui avance : chaque morceau est une étape qui apporte du neuf, pas un exemple de plus du même point.
+- Elle est RACONTABLE avec des morceaux entiers : si la démonstration exige d'écouter 10 secondes précises, c'est une piste d'article, pas d'émission.
+- Test d'élimination : si la piste pourrait servir telle quelle pour un AUTRE artiste du même genre, elle est trop générique — jette-la.`;
+
 export async function proposePistes(
   title: string,
   artist: string,
   facts: string,
   avoidArchetypes: string[] = [],
   knownCandidates: { title: string; artist: string }[] = [],
+  flavor: PisteFlavor = "rester",
 ): Promise<Piste[]> {
   const palette = Object.entries(ARCHETYPES)
     .map(([key, label]) => `- ${key} : ${label}`)
@@ -63,14 +89,18 @@ export async function proposePistes(
     max_tokens: 4000,
     system: `Tu es rédacteur en chef d'une radio musicale (esprit FIP/Nova). À partir d'un morceau de départ et de faits sourcés, tu proposes TROIS PISTES d'émission distinctes — pas une. Une piste = un voyage possible de 7-8 morceaux.
 
+TA FAMILLE DE PISTES : ${FLAVOR_BRIEFS[flavor]}
+
+${PISTE_DOCTRINE}
+
 Pour chaque piste tu donnes :
 - "archetype" : une clé de la palette ci-dessous (trois pistes = trois archétypes différents)
 - "enonce" : la phrase que l'animateur dirait pour annoncer le sujet (règles plus bas)
 - "description" : le fil rouge en une phrase
 - "candidats" : 8 à 10 morceaux qui pourraient jalonner ce voyage. Pour CHACUN, "lien" = le lien CONCRET affirmé avec le fil (producteur commun, sample, label, influence, scène, date…). Pas de morceau « qui ressemble » : un morceau sans lien nommable ne se propose pas. Le morceau de départ n'est PAS dans les candidats (il ouvre toujours).
-- "requetes" : 2 recherches web (en français ou anglais) qui permettraient de DOCUMENTER ce fil (vérifier les liens, trouver les anecdotes).
+- "requetes" : 3 recherches web (en français ou anglais) qui permettraient de DOCUMENTER ce fil (vérifier les liens, trouver les anecdotes).
 
-Les trois pistes doivent être réellement différentes : pas trois variations du même sujet. Au moins une piste doit oser un vrai VOYAGE (une traversée par étapes documentées — chaque morceau est le pont vers le suivant), pas seulement « la scène de la graine ».
+Les trois pistes doivent être réellement différentes : pas trois variations du même sujet.
 Les liens des candidats doivent être plausibles et vérifiables — au repérage, un lien faux élimine le candidat, une piste pleine de liens faux meurt. Ne gonfle rien.
 
 Palette d'archétypes :
@@ -81,7 +111,7 @@ ${FRENCH_SUBJECT_RULES}
 ${FRENCH_STYLE_RULES}
 
 Réponds UNIQUEMENT en JSON valide, sans markdown :
-{"pistes": [{"archetype": "…", "enonce": "…", "description": "…", "candidats": [{"title": "…", "artist": "…", "lien": "…"}], "requetes": ["…", "…"]}]}`,
+{"pistes": [{"archetype": "…", "enonce": "…", "description": "…", "candidats": [{"title": "…", "artist": "…", "lien": "…"}], "requetes": ["…", "…", "…"]}]}`,
     messages: [
       {
         role: "user",
@@ -103,6 +133,7 @@ Propose les trois pistes.`,
 
 export interface Reperage {
   piste: Piste;
+  flavor?: PisteFlavor;
   matter: string; // matière trouvée au repérage (extraits concaténés)
   resolved: { candidate: PisteCandidate; track: SpotifyTrack }[];
 }
@@ -115,24 +146,26 @@ export async function choosePiste(
   const response = await getClient().messages.create({
     model: "claude-sonnet-4-5",
     max_tokens: 500,
-    system: `Tu es rédacteur en chef. Trois pistes d'émission ont été repérées : pour chacune tu vois la matière documentaire RÉELLEMENT trouvée et les morceaux RÉELLEMENT disponibles. Tu choisis la piste qui fera la meilleure émission, sur ces critères dans l'ordre :
-1. La RICHESSE DOCUMENTÉE : des faits précis, des anecdotes, des citations trouvées au repérage — pas la séduction du concept.
-2. Le VOYAGE : assez de morceaux disponibles (7 minimum) avec des liens vérifiés entre eux, qui permettent un déroulé qui avance.
-3. La SURPRISE : à concept égal, la piste la moins attendue.
+    system: `Tu es rédacteur en chef. Plusieurs pistes d'émission ont été repérées : pour chacune tu vois ses MÉTRIQUES (morceaux réellement disponibles, volume de matière documentaire trouvée) et la matière elle-même. Tu choisis la piste qui fera la meilleure émission, sur ces critères dans l'ordre :
+1. La RICHESSE DOCUMENTÉE : des faits précis, des anecdotes, des citations trouvées au repérage — pas la séduction du concept. Une piste séduisante sans matière est un piège : élimine-la.
+2. Le VOYAGE : assez de morceaux disponibles (6 minimum) avec des liens vérifiés entre eux, qui permettent un déroulé qui AVANCE — une progression, pas une collection.
+3. La SURPRISE : à richesse égale, la piste la moins attendue gagne.
 
-Réponds UNIQUEMENT en JSON : {"choix": <index 0, 1 ou 2>, "raison": "une phrase"}`,
+Réponds UNIQUEMENT en JSON : {"choix": <index de la piste>, "raison": "une phrase"}`,
     messages: [
       {
         role: "user",
         content: `Graine : "${title}" de ${artist}
+${reperages.length} pistes repérées (index 0 à ${reperages.length - 1}).
 
 ${reperages
   .map(
-    (r, i) => `=== PISTE ${i} — ${r.piste.enonce}
+    (r, i) => `=== PISTE ${i} [famille ${r.flavor ?? "?"}] — ${r.piste.enonce}
 Fil : ${r.piste.description}
-Morceaux disponibles (${r.resolved.length}) : ${r.resolved.map((x) => `${x.track.title} — ${x.track.artist} (lien : ${x.candidate.lien})`).join(" | ") || "AUCUN"}
-Matière trouvée au repérage (${r.matter.length} car.) :
-${r.matter.slice(0, 2500) || "(rien)"}`,
+MÉTRIQUES : ${r.resolved.length} morceaux disponibles | ${r.matter.length} car. de matière
+Morceaux : ${r.resolved.map((x) => `${x.track.title} — ${x.track.artist} (lien : ${x.candidate.lien})`).join(" | ") || "AUCUN"}
+Matière (extrait) :
+${r.matter.slice(0, 1800) || "(rien)"}`,
   )
   .join("\n\n")}
 
@@ -227,5 +260,65 @@ ${reperage.matter.slice(0, 5000)}
     return parsed;
   } catch {
     return null;
+  }
+}
+
+// Contrôle du conducteur : chaque pont est une AFFIRMATION — s'il est faux,
+// toutes les narrations en aval héritent de l'erreur. On vérifie chaque pont
+// contre la matière du repérage AVANT d'écrire quoi que ce soit. Un pont
+// contredit ou risqué-invérifiable éjecte son slot (le déroulé se resserre,
+// il ne ment pas). Fail-open : si le contrôleur tombe, on garde tout.
+export async function verifyConducteur(
+  conducteur: Conducteur,
+  reperage: Reperage,
+): Promise<Conducteur> {
+  try {
+    const response = await getClient().messages.create({
+      model: "claude-sonnet-4-5",
+      max_tokens: 800,
+      system: `Tu es vérificateur éditorial. On te donne le conducteur d'une émission musicale : une suite d'étapes dont chacune affirme un PONT factuel (ce qui relie un morceau au précédent). Tu juges chaque pont contre la matière documentaire fournie et la connaissance solidement établie :
+- "soutenu" : la matière le confirme, ou c'est un fait culturel large et incontesté.
+- "plausible" : non confirmé par la matière mais cohérent et peu risqué (pas de date précise, pas de chiffre, pas d'attribution pointue).
+- "douteux" : contredit par la matière, OU affirmation précise et risquée (date exacte, crédit pointu, citation) qu'aucune source ne soutient.
+
+Sois exigeant sur les ponts "douteux" : mieux vaut une émission plus courte qu'un pont faux à l'antenne.
+
+Réponds UNIQUEMENT en JSON : {"verdicts": ["soutenu"|"plausible"|"douteux", …]} — un par étape, dans l'ordre.`,
+      messages: [
+        {
+          role: "user",
+          content: `Ponts du conducteur, dans l'ordre :
+${conducteur.slots.map((s, i) => `${i + 1}. [avant « ${s.title} » de ${s.artist}] ${s.pont}`).join("\n")}
+
+Matière documentaire du repérage :
+${reperage.matter.slice(0, 6000) || "(aucune)"}
+
+Liens affirmés aux candidats :
+${reperage.resolved.map((x) => `- ${x.track.title} — ${x.track.artist} : ${x.candidate.lien}`).join("\n")}
+
+Renvoie les verdicts.`,
+        },
+      ],
+    });
+
+    const text =
+      response.content[0].type === "text" ? response.content[0].text : "";
+    const parsed = parseJson<{ verdicts?: string[] }>(text);
+    const verdicts = parsed.verdicts || [];
+    if (verdicts.length !== conducteur.slots.length) return conducteur;
+
+    const kept = conducteur.slots.filter((_, i) => verdicts[i] !== "douteux");
+    const dropped = conducteur.slots.length - kept.length;
+    if (dropped > 0) {
+      console.log(
+        `Conducteur : ${dropped} étape(s) au pont douteux éjectée(s)`,
+      );
+    }
+    // En dessous de 3 étapes le déroulé ne tient plus : on garde l'original
+    // (les garde-fous narration/verify restent en aval).
+    if (kept.length < 3) return conducteur;
+    return { ...conducteur, slots: kept };
+  } catch {
+    return conducteur;
   }
 }

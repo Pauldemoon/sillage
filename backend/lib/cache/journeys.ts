@@ -45,7 +45,11 @@ const JOURNEY_TTL_DAYS = 120;
 // v10 (2026-06-11) : la SALLE DE RÉDACTION — trois pistes d'angle, repérage
 //                    documenté avant sélection, conducteur (déroulé écrit
 //                    avant les narrations, question plantée/payée).
-const PIPELINE_VERSION = "v10";
+// v11 (2026-06-11) : salle de rédaction renforcée — 9 pistes en 3 familles
+//                    (rester/voyager/contexte), doctrine maison au lieu des
+//                    100 recettes auto-générées, repérage à 3 requêtes,
+//                    contrôle des ponts du conducteur.
+const PIPELINE_VERSION = "v11";
 
 function seedKey(title: string, artist: string): string {
   return `${PIPELINE_VERSION}:${cacheKey(title, artist)}`;

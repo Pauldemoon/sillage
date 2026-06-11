@@ -6,9 +6,11 @@ import {
   proposePistes,
   choosePiste,
   writeConducteur,
+  verifyConducteur,
   type Conducteur,
   type ConducteurSlot,
   type PisteCandidate,
+  type PisteFlavor,
   type Reperage,
 } from "./agents/redaction";
 import { fetchTavily } from "../lib/sources/tavily";
@@ -643,24 +645,38 @@ async function runHandler(
     };
 
     try {
-      const pistes = await proposePistes(
-        title,
-        artist,
-        seedResearch.facts,
-        avoidArchetypes,
-        candidatePool,
+      // Neuf pistes en trois familles forcées (3 appels parallèles) : un seul
+      // appel s'auto-ancre ; trois briefs distincts = diversité structurelle.
+      const flavors: PisteFlavor[] = ["rester", "voyager", "contexte"];
+      const pisteBatches = await Promise.all(
+        flavors.map((flavor) =>
+          proposePistes(
+            title,
+            artist,
+            seedResearch.facts,
+            avoidArchetypes,
+            candidatePool,
+            flavor,
+          ).catch((err) => {
+            console.error(`pistes ${flavor}:`, err?.message || err);
+            return [];
+          }),
+        ),
       );
-      if (!pistes.length) throw new Error("aucune piste proposée");
+      const flavored = flavors.flatMap((flavor, fi) =>
+        pisteBatches[fi].map((piste) => ({ piste, flavor })),
+      );
+      if (!flavored.length) throw new Error("aucune piste proposée");
       _lap("pistes");
 
       // Repérage : pour chaque piste, la matière documentaire (Tavily sur le
       // FIL, pas sur un titre) et la disponibilité réelle des candidats.
       const reperages: Reperage[] = await Promise.all(
-        pistes.map(async (piste) => {
+        flavored.map(async ({ piste, flavor }) => {
           const [matterArrays, resolvedRaw] = await Promise.all([
             Promise.all(
               (piste.requetes || [])
-                .slice(0, 2)
+                .slice(0, 3)
                 .map((q) =>
                   fetchTavily(title, artist, undefined, q).catch(() => []),
                 ),
@@ -685,7 +701,7 @@ async function runHandler(
             ): x is { candidate: PisteCandidate; track: SpotifyTrack } =>
               x !== null,
           );
-          return { piste, matter, resolved };
+          return { piste, flavor, matter, resolved };
         }),
       );
       _lap("reperage");
@@ -703,6 +719,11 @@ async function runHandler(
         chosen,
         seedResearch.facts,
       );
+      // Chaque pont du conducteur est une affirmation : on le contrôle contre
+      // la matière AVANT d'écrire — un pont douteux éjecte son étape.
+      if (conducteur) {
+        conducteur = await verifyConducteur(conducteur, chosen);
+      }
       _lap("conducteur");
 
       if (conducteur) {
