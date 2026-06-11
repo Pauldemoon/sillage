@@ -37,6 +37,35 @@ const BED_SOURCE = require("../assets/audio/ambiance.mp3");
 const BED_VOLUME = 0.22;
 const BED_FADE_OUT_MS = 900;
 
+// Habillage d'antenne — sonal (signature d'ouverture), sweeper (entrée de
+// voix), stinger (départ de titre). Sons v1 synthétisés (Fa majeur, famille
+// "mer" assortie au lit) — remplaçables par les assets de Paul, mêmes noms.
+// Tout est réglable/désactivable en OTA.
+const SFX = {
+  sonal: { source: require("../assets/audio/sonal.m4a"), volume: 0.7, enabled: true },
+  sweeper: { source: require("../assets/audio/sweeper.m4a"), volume: 0.32, enabled: true },
+  stinger: { source: require("../assets/audio/stinger.m4a"), volume: 0.38, enabled: true },
+} as const;
+
+export function playSfx(kind: keyof typeof SFX): void {
+  const sfx = SFX[kind];
+  if (!sfx.enabled) return;
+  try {
+    const player = createAudioPlayer(sfx.source);
+    player.volume = sfx.volume;
+    player.play();
+    // Les éléments font < 4 s : nettoyage différé, sans suivi d'état.
+    setTimeout(() => {
+      try {
+        player.pause();
+        player.remove();
+      } catch {}
+    }, 6000);
+  } catch {
+    // L'habillage ne doit jamais casser l'antenne.
+  }
+}
+
 let bedPlayer: AudioPlayer | null = null;
 
 function startBed(): void {
@@ -91,6 +120,8 @@ export async function playNarration(
   await stopAudio();
   // On ducke Spotify uniquement maintenant (il est déjà connecté et joue).
   await setInterruption("duckOthers");
+  // Habillage : la vague d'entrée annonce la voix, le lit s'installe dessous.
+  playSfx("sweeper");
   startBed();
   const player = createAudioPlayer({ uri: uri });
   currentPlayer = player;
@@ -153,6 +184,9 @@ export async function playNarration(
       }, NARRATION_MAX_MS);
     });
   } finally {
+    // Habillage : le stinger marque le départ du titre pendant que le lit
+    // s'éteint et que la musique remonte.
+    playSfx("stinger");
     // Le lit survit ~1 s à la voix (fondu), puis on rend le focus → Spotify
     // remonte à plein volume sous la fin du fondu.
     await fadeOutBed();

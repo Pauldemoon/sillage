@@ -15,7 +15,12 @@ import {
   mergeMemoryPatch,
   rememberJourney,
 } from "../services/memory";
-import { setupAudio, playNarration, stopAudio } from "../services/audio";
+import {
+  setupAudio,
+  playNarration,
+  stopAudio,
+  playSfx,
+} from "../services/audio";
 import { logDebug, subscribeDebug } from "../services/debug";
 import {
   connectSpotify,
@@ -142,6 +147,9 @@ export default function PlayerScreen() {
   async function startEmission() {
     try {
       await setupAudio();
+      // Le sonal d'antenne : la signature Sillage, qui habille au passage le
+      // temps de connexion avant le premier morceau.
+      playSfx("sonal");
 
       if (initialEmission) {
         mergeMemoryPatch(initialEmission.memoryPatch).catch(() => {});
