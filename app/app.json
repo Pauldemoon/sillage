@@ -20,7 +20,8 @@
         "UIBackgroundModes": [
           "audio",
           "audio"
-        ]
+        ],
+        "NSAppleMusicUsageDescription": "Sillage joue les morceaux de tes émissions via Apple Music."
       }
     },
     "android": {

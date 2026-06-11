@@ -67,7 +67,10 @@ export default function SearchScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View style={[styles.header, hasResults && styles.headerCompact]}>
-          <Text style={styles.logo}>Sillage</Text>
+          {/* Appui long : écran labo (spike MusicKit). */}
+          <Text style={styles.logo} onLongPress={() => router.push("/labo")}>
+            Sillage
+          </Text>
         </View>
 
         <View style={[styles.searchBox, glassShadow]}>
