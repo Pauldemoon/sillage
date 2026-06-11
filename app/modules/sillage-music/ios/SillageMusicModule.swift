@@ -6,7 +6,7 @@ import MusicKit
 // La lecture passe par ApplicationMusicPlayer (in-app, n'altère pas l'app Musique).
 public class SillageMusicModule: Module {
 
-  private func statusString(_ status: MusicPlayer.PlaybackStatus) -> String {
+  private func statusString(_ status: MusicKit.MusicPlayer.PlaybackStatus) -> String {
     switch status {
     case .playing: return "playing"
     case .paused: return "paused"
