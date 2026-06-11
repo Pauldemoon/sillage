@@ -53,16 +53,17 @@ TEST FINAL : si une phrase sonne traduite, vague ou écrite par une machine, ré
 // Règles de l'ÉNONCÉ DU SUJET : il n'y a PAS de titre d'émission. On dit de
 // quoi on va parler, comme un animateur l'annoncerait à l'antenne — c'est le
 // texte affiché dans l'app et le cap donné aux narrations.
-export const FRENCH_SUBJECT_RULES = `RÈGLES DE L'ÉNONCÉ DU SUJET — il n'y a PAS de titre d'émission, on annonce de quoi on va parler :
-- Une phrase (ou un fragment) NATURELLE, dicible telle quelle à voix haute par l'animateur. Pas un nom d'épisode, pas un slogan, pas un packaging.
+export const FRENCH_SUBJECT_RULES = `RÈGLES DE L'ÉNONCÉ DU SUJET — il n'y a PAS de titre d'émission. C'est l'animateur qui annonce son sujet, comme un rédacteur en chef le dirait en conférence :
+- Une VRAIE PHRASE PARLÉE, avec un verbe conjugué, à la première personne du programme (« on va parler de… », « on part à… », « je t'emmène… »). Un fragment nominal sans verbe = un titre déguisé = raté.
 - Elle nomme des choses CONCRÈTES de l'épisode : un lieu, un studio, un disque, des gens, une année. C'est le concret qui donne envie, pas la formule.
-- INTERDIT : tout ce qui sonne titre tout fait (forme figée, majuscules de titre, deux-points marketing « X : Y ») ; les ouvertures dramatiques « Quand… », « Le jour où… » ; les métaphores grandioses ou guerrières (déclarer la guerre, révolution, légende) ; le ton bande-annonce.
-- Test : est-ce que Charlie pourrait dire cette phrase telle quelle au micro pour annoncer le sujet (« aujourd'hui, … ») ? Si ça sonne comme une jaquette de DVD, c'est raté.
+- Varie l'attaque d'une émission à l'autre — pas toujours « On va parler de… ».
+- INTERDIT : tout ce qui sonne titre (fragment nominal, forme figée, deux-points marketing) ; les ouvertures dramatiques « Quand… », « Le jour où… » ; les métaphores grandioses ou guerrières ; le ton bande-annonce.
+- Test : est-ce que l'animateur pourrait dire EXACTEMENT cette phrase au micro pour lancer son émission ? Si elle ne se dit pas naturellement avec un verbe, c'est un titre — réécris.
 
 EXEMPLES :
-- BON : "Sarcelles, le 95200, et le premier album de rap qui vient des cités"
-- BON : "Un studio collé au Mur de Berlin, et ce qu'il a fait au son de Bowie"
-- BON : "La bande de Versailles — deux lycées, trois groupes, un son"
-- MAUVAIS : "Sarcelles 95200" (titre tout fait, packaging)
-- MAUVAIS : "Le jour où Sarcelles a déclaré la guerre" (titre dramatique)
-- MAUVAIS : "Be My Baby : Le battement qui traverse le siècle" (jaquette de DVD)`;
+- BON : "On va parler de Sarcelles, et de ce que le rap français doit au 95200."
+- BON : "Je t'emmène à Berlin-Ouest, dans un studio collé au Mur, là où Bowie a changé de son."
+- BON : "On reste à Versailles, entre deux lycées qui ont donné trois groupes — et un seul son."
+- MAUVAIS : "Sarcelles, le 95200, et le premier album de rap de cité" (fragment nominal = titre déguisé)
+- MAUVAIS : "Sarcelles 95200" (titre packagé)
+- MAUVAIS : "Le jour où Sarcelles a déclaré la guerre" (titre dramatique)`;
