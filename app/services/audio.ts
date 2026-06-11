@@ -25,8 +25,9 @@ export async function setupAudio(): Promise<void> {
 // Fade-in court de la voix pour ne pas "claquer" par-dessus la musique duckée.
 const FADE_IN_MS = 600;
 // Filet anti-gel : on n'attend JAMAIS une narration plus longtemps que ça.
-// Les narrations font < 1 min ; au-delà, c'est qu'un son n'a pas chargé.
-const NARRATION_MAX_MS = 90000;
+// Une loupe de 170 mots ≈ 70-80 s de voix ; au-delà de 2 min, c'est qu'un
+// son n'a pas chargé.
+const NARRATION_MAX_MS = 120000;
 
 // Lit musical sous la voix — l'habillage radio (boucle ambiante ~30 s fournie
 // par Paul). Il démarre avec Charlie, tourne à bas volume sous lui, et meurt

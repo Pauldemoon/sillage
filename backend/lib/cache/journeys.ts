@@ -40,7 +40,9 @@ const JOURNEY_TTL_DAYS = 120;
 // v8 (2026-06-10) : plus de titre DU TOUT (décision Paul) — l'angle devient
 //                   l'ÉNONCÉ du sujet, la phrase qui dit de quoi on va parler,
 //                   dicible à l'antenne telle quelle.
-const PIPELINE_VERSION = "v8";
+// v9 (2026-06-11) : émissions de 7-8 titres (14 candidats demandés, graine
+//                   insubmersible, cible 8) + deux loupes dans l'horloge.
+const PIPELINE_VERSION = "v9";
 
 function seedKey(title: string, artist: string): string {
   return `${PIPELINE_VERSION}:${cacheKey(title, artist)}`;

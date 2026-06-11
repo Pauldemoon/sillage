@@ -247,7 +247,7 @@ async function applyReplacements(
   const next = [...dossiers];
   const replacements = review.replacements
     .filter(
-      (replacement) => replacement.position >= 2 && replacement.position <= 5,
+      (replacement) => replacement.position >= 2 && replacement.position <= 8,
     )
     .slice(0, 2);
 
@@ -290,7 +290,7 @@ async function applyReplacements(
     };
   }
 
-  return next.filter(Boolean).slice(0, 5);
+  return next.filter(Boolean).slice(0, 8);
 }
 
 async function curateDossiers(

@@ -73,7 +73,9 @@ export interface Emission {
 // interroge le résultat toutes les 3 s (requêtes courtes) → jamais le mur des
 // 60 s. Tout ça tourne en fond pendant que le morceau de départ joue.
 const POLL_INTERVAL_MS = 3000;
-const GENERATION_DEADLINE_MS = 5 * 60 * 1000;
+// 7-8 titres = ~7 narrations séquentielles : une génération neuve peut
+// prendre 4-5 min. Le morceau de départ couvre l'essentiel de l'attente.
+const GENERATION_DEADLINE_MS = 7 * 60 * 1000;
 
 export interface Teaser {
   text: string;

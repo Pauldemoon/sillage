@@ -1,5 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { findBestTrackMatch, SpotifyTrack } from "../../lib/spotify";
+import {
+  findBestTrackMatch,
+  searchTracks,
+  SpotifyTrack,
+} from "../../lib/spotify";
+
+// L'émission visée fait 7-8 titres (~30 min) : assez pour deux grandes
+// histoires (loupes) et de vrais liens courts entre elles.
+const TARGET_TRACKS = 8;
 import { SILLAGE_EDITORIAL_CHARTER } from "../../lib/editorial/charter";
 import type { UserMemoryProfile } from "../../lib/memory/profile";
 import { formatMemoryForPrompt } from "../../lib/memory/profile";
@@ -41,18 +49,18 @@ ${knownCandidates.map((c) => `- ${c.title} — ${c.artist}`).join("\n")}`
     : "";
   const response = await getClient().messages.create({
     model: "claude-sonnet-4-5",
-    max_tokens: 800,
+    max_tokens: 1000,
     // Prompt caching : la charte (longue) est partagée entre émissions proches.
     system: [
       {
         type: "text",
-        text: `Tu es un programmateur radio musical expert. Tu sélectionnes 5 morceaux pour une émission.
+        text: `Tu es un programmateur radio musical expert. Tu sélectionnes 7 à 8 morceaux pour une émission d'environ une demi-heure.
 
 ${SILLAGE_EDITORIAL_CHARTER}
 
 Règles :
 - Le morceau de départ est TOUJOURS le premier
-- Les 4 suivants doivent correspondre à l'angle éditorial
+- Tous les suivants doivent correspondre à l'angle éditorial
 - Cohérence de scène : la playlist SUIT l'angle, et n'est jamais figée. Une graine francophone donne le plus souvent une playlist francophone — et elle peut très bien être 100 % FR (une lignée, un mouvement local : rap FR → rap FR). Mais si l'angle est un vrai croisement ou un duel (ex. « Sevran contre Chicago »), la playlist peut faire dialoguer les deux scènes. La seule règle dure : pas de titres étrangers SANS que l'angle les justifie. À l'inverse, n'hésite jamais à rester 100 % dans la scène de la graine quand l'angle est local. Au cas par cas, ni « toujours FR » ni « toujours croisé »
 - Chaque morceau doit exister sur Spotify
 - Diversifie les artistes (pas 2 morceaux du même artiste)
@@ -79,7 +87,7 @@ ${formatMemoryForPrompt(memory) || "Aucune mémoire disponible."}
 Faits sourcés :
 ${facts.slice(0, 1000)}${poolBlock}
 
-Donne-moi 8 morceaux candidats. Le premier doit être le morceau de départ.`,
+Donne-moi 14 morceaux candidats, classés du plus au moins essentiel à l'angle. Le premier doit être le morceau de départ. (On en gardera 8 : les candidats au-delà servent de réserve quand un titre est introuvable sur Spotify.)`,
       },
     ],
   });
@@ -95,8 +103,8 @@ Donne-moi 8 morceaux candidats. Le premier doit être le morceau de départ.`,
   // Les recherches Spotify sont indépendantes : on les lance toutes en
   // parallèle (au lieu d'une boucle séquentielle) pour réduire fortement la
   // latence, puis on applique la déduplication dans l'ordre des suggestions.
-  const [seed, candidates] = await Promise.all([
-    findBestTrackMatch(title, artist),
+  const [seedExact, candidates] = await Promise.all([
+    findBestTrackMatch(title, artist).catch(() => null),
     Promise.all(
       suggestions.map((s) =>
         findBestTrackMatch(s.title, s.artist).catch(() => null),
@@ -104,14 +112,25 @@ Donne-moi 8 morceaux candidats. Le premier doit être le morceau de départ.`,
     ),
   ]);
 
+  // La graine est SACRÉE : l'utilisateur l'a choisie depuis la recherche
+  // Spotify, elle existe. Si le match strict échoue (titre-code postal,
+  // ponctuation d'artiste…), on prend le meilleur résultat brut plutôt que
+  // de la perdre — une émission sans son morceau de départ n'a pas de sens.
+  const seed =
+    seedExact ||
+    (await searchTracks(`${title} ${artist}`, 1).catch(() => []))[0] ||
+    null;
+  if (!seed) {
+    throw new Error(`Morceau de départ introuvable sur Spotify : ${title}`);
+  }
+
   // Filtre dur : un artiste explicitement rejeté ne doit JAMAIS apparaître,
   // même si le modèle l'a proposé malgré la consigne. Le morceau de départ
   // reste sacré (l'utilisateur l'a choisi), on ne le filtre donc pas.
   const isDisliked = (artist: string) =>
     memory.dislikedArtists.some((disliked) => sameArtist(disliked, artist));
 
-  const tracks: SpotifyTrack[] = [];
-  if (seed) tracks.push(seed);
+  const tracks: SpotifyTrack[] = [seed];
 
   for (const track of candidates) {
     if (!track) continue;
@@ -121,7 +140,13 @@ Donne-moi 8 morceaux candidats. Le premier doit être le morceau de départ.`,
     }
 
     tracks.push(track);
-    if (tracks.length >= 5) break;
+    if (tracks.length >= TARGET_TRACKS) break;
+  }
+
+  if (tracks.length < 7) {
+    console.error(
+      `playlist: seulement ${tracks.length} titres résolus sur ${suggestions.length} candidats`,
+    );
   }
 
   return tracks;

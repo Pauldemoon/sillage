@@ -54,9 +54,19 @@ function rolesFor(slotCount: number): NarrationRole[] {
   if (slotCount === 1) return ["lancement"];
   if (slotCount === 2) return ["lancement", "sortie"];
   if (slotCount === 3) return ["lancement", "loupe", "sortie"];
-  // 4 et plus : une seule loupe au centre, des liens autour.
+
   const middle: NarrationRole[] = Array(slotCount - 2).fill("lien");
-  middle[Math.floor((middle.length - 1) / 2)] = "loupe";
+  if (middle.length >= 4) {
+    // Émission longue (7-8 titres) : DEUX grandes histoires, espacées d'au
+    // moins un lien — une demi-heure ne tient pas sur une seule loupe.
+    const first = 1;
+    const second = Math.max(first + 2, middle.length - 2);
+    middle[first] = "loupe";
+    middle[second] = "loupe";
+  } else {
+    // Émission courte : une seule loupe au centre.
+    middle[Math.floor((middle.length - 1) / 2)] = "loupe";
+  }
   return ["lancement", ...middle, "sortie"];
 }
 
