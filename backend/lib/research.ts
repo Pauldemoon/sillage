@@ -1,3 +1,4 @@
+import Anthropic from "@anthropic-ai/sdk";
 import { fetchWikipediaTrack } from "./sources/wikipedia";
 import { fetchMusicBrainz } from "./sources/musicbrainz";
 import { fetchTheAudioDB } from "./sources/theaudiodb";
@@ -17,6 +18,64 @@ export interface SourcedFact {
 export interface ResearchResult {
   facts: string;
   sources: SourcedFact[];
+}
+
+// Filtre de pertinence sur la presse : le filtre de DOMAINES garantit la
+// qualité de la plume, pas le sujet (constaté au banc : 4 extraits de bonne
+// presse musicale dont AUCUN ne parlait de « Sexual Healing »). Un extrait
+// hors-sujet entre dans le dossier et le modèle meuble avec → narration
+// creuse. Une passe Haiku jette ce qui ne parle ni du morceau ni de
+// l'artiste. En cas de panne du juge, on garde tout (fail-open).
+async function filterRelevantPress(
+  title: string,
+  artist: string,
+  extracts: SourcedFact[],
+): Promise<SourcedFact[]> {
+  if (extracts.length === 0) return extracts;
+  try {
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const response = await client.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 150,
+      system: `Tu juges la pertinence d'extraits de presse pour le dossier documentaire d'un morceau de musique. Pour chaque extrait, réponds :
+- "morceau" : il parle vraiment du morceau visé (chronique, analyse, histoire de l'enregistrement…)
+- "artiste" : il parle substantiellement de l'artiste visé (interview, portrait, chronique d'un autre de ses disques)
+- "hors-sujet" : il ne fait que mentionner l'artiste en passant, ou parle d'autre chose
+
+Réponds UNIQUEMENT en JSON valide, sans markdown : {"verdicts": ["morceau"|"artiste"|"hors-sujet", …]} — un verdict par extrait, dans l'ordre.`,
+      messages: [
+        {
+          role: "user",
+          content: `Morceau visé : "${title}" de ${artist}
+
+${extracts
+  .map(
+    (extract, index) =>
+      `[Extrait ${index + 1} — ${extract.source}]\n${extract.content.slice(0, 1500)}`,
+  )
+  .join("\n\n")}`,
+        },
+      ],
+    });
+
+    const text =
+      response.content[0].type === "text" ? response.content[0].text : "";
+    const parsed = JSON.parse(
+      text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim(),
+    ) as { verdicts?: string[] };
+    const verdicts = parsed.verdicts || [];
+    if (verdicts.length !== extracts.length) return extracts;
+
+    const kept = extracts.filter((_, index) => verdicts[index] !== "hors-sujet");
+    if (kept.length < extracts.length) {
+      console.log(
+        `Pertinence : ${extracts.length - kept.length} extrait(s) hors-sujet écarté(s) pour ${title} — ${artist}`,
+      );
+    }
+    return kept;
+  } catch {
+    return extracts;
+  }
 }
 
 /**
@@ -70,7 +129,27 @@ export async function researchArtist(
   // vraies plumes, pas seulement des métadonnées. Tavily est la seule source
   // payante, mais le résultat est mis en cache 60 j : la presse n'est donc
   // payée qu'UNE fois par morceau, jamais re-payée ensuite.
-  const tavily = await fetchTavily(title, artist, domains);
+  // Chaque moisson passe le filtre de pertinence ; si la première est trop
+  // maigre après tri, une seconde requête recentrée sur l'artiste complète.
+  let tavily = await filterRelevantPress(
+    title,
+    artist,
+    await fetchTavily(title, artist, domains),
+  );
+  if (tavily.length < 2) {
+    const retry = await filterRelevantPress(
+      title,
+      artist,
+      await fetchTavily(
+        title,
+        artist,
+        domains,
+        `${artist} "${title}" interview chronique enregistrement album`,
+      ),
+    );
+    const seen = new Set(tavily.map((s) => s.url));
+    tavily = [...tavily, ...retry.filter((s) => !seen.has(s.url))];
+  }
 
   // L'ORDRE du dossier = sa priorité éditoriale, parce que les agents en aval
   // tronquent (la narration ne lit que les premiers milliers de caractères).

@@ -32,6 +32,9 @@ export async function fetchTavily(
   title: string,
   artist: string,
   domains?: string[],
+  // Requête de repli quand la première moisson est jugée hors-sujet par le
+  // filtre de pertinence (cf. research.ts) — recentrée différemment.
+  queryOverride?: string,
 ): Promise<SourcedFact[]> {
   const key = process.env.TAVILY_API_KEY;
   if (!key) return [];
@@ -41,7 +44,9 @@ export async function fetchTavily(
       "https://api.tavily.com/search",
       {
         api_key: key,
-        query: `"${title}" ${artist} signification analyse critique histoire`,
+        query:
+          queryOverride ||
+          `"${title}" ${artist} signification analyse critique histoire`,
         search_depth: "advanced",
         max_results: 4,
         // On veut l'ARTICLE complet, pas la bribe. Sans ça, Tavily ne renvoie

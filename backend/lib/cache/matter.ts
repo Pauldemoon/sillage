@@ -6,6 +6,15 @@ import { getCache, cacheKey } from "./client";
 const RESEARCH_TTL_DAYS = 60;
 const TRACK_TTL_DAYS = 90;
 
+// Version de la matière recherche — incrémenter quand le pipeline de dossier
+// change assez pour que l'ancien cache ne soit plus représentatif.
+// r2 (2026-06-11) : filtre de pertinence Haiku sur les extraits presse.
+const RESEARCH_CACHE_VERSION = "r2";
+
+function researchKey(title: string, artist: string): string {
+  return `${RESEARCH_CACHE_VERSION}:${cacheKey(title, artist)}`;
+}
+
 function expiresAt(days: number): string {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
 }
@@ -22,7 +31,7 @@ export async function getCachedResearch<T>(
     const { data } = await db
       .from("research_cache")
       .select("payload, expires_at")
-      .eq("cache_key", cacheKey(title, artist))
+      .eq("cache_key", researchKey(title, artist))
       .maybeSingle();
     if (!data) return null;
     if (new Date(data.expires_at).getTime() < Date.now()) return null;
@@ -41,7 +50,7 @@ export async function setCachedResearch(
   if (!db) return;
   try {
     await db.from("research_cache").upsert({
-      cache_key: cacheKey(title, artist),
+      cache_key: researchKey(title, artist),
       title,
       artist,
       payload,
