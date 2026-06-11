@@ -37,7 +37,10 @@ const JOURNEY_TTL_DAYS = 120;
 //                   v5 (budgets explosés, sortie sans graine) expirent seuls.
 // v7 (2026-06-10) : titres d'émission NOMINAUX (2-5 mots, ancrage concret) —
 //                   fini les « Quand… / Le jour où… » dramatiques.
-const PIPELINE_VERSION = "v7";
+// v8 (2026-06-10) : plus de titre DU TOUT (décision Paul) — l'angle devient
+//                   l'ÉNONCÉ du sujet, la phrase qui dit de quoi on va parler,
+//                   dicible à l'antenne telle quelle.
+const PIPELINE_VERSION = "v8";
 
 function seedKey(title: string, artist: string): string {
   return `${PIPELINE_VERSION}:${cacheKey(title, artist)}`;

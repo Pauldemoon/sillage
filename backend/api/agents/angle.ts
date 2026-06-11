@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import {
   FRENCH_STYLE_RULES,
-  FRENCH_TITLE_RULES,
+  FRENCH_SUBJECT_RULES,
 } from "../../lib/editorial/french";
 import { sampleRecipes, formatRecipes } from "../../lib/editorial/recipes";
 
@@ -68,14 +68,14 @@ L'angle doit :
 - Passer le test du naturel : l'angle doit pouvoir se dire à un ami en UNE phrase qui lui fait lever un sourcil (« tu savais que tout ce son vient d'un seul immeuble de Versailles ? »). Si la phrase sonne comme un concept de conférence ou un dossier de presse, c'est raté — reformule à partir du fait le plus surprenant du dossier
 - Garantir une vraie cohérence entre les 5 morceaux (attention aux contradictions : ne propose pas un angle "contre l'Angleterre" si tu comptes mettre des groupes anglais)
 - La SCÈNE du voyage (souple, jamais figée) : le plus souvent, le voyage RESTE dans le monde de la graine (rap FR → rap FR, soul → soul), surtout pour une graine francophone — c'est le réflexe par défaut. Une influence étrangère, même revendiquée (ex. la drill de Chicago derrière un rappeur français), se RACONTE dans l'émission ; elle ne fait pas partir le voyage à l'étranger pour autant. Croiser pour de vrai vers une autre scène ou un autre pays reste possible, mais c'est l'EXCEPTION : seulement quand le lien est si fort et si évident que l'épisode serait bancal sans lui. Juge au cas par cas — ni "toujours français", ni "toujours croisé" — mais dans le doute, tu restes à la maison. Et même quand tu croises, la scène de la graine reste la BASE et la majorité des titres : la scène étrangère n'est qu'un contrepoint ou une source qu'on raconte (ex. un duel "Sevran contre Chicago" ancré à Sevran), jamais la destination où l'on déménage toute la playlist
-- Avoir un titre d'émission NOMINAL de 2 à 5 mots, ancré sur un élément concret de l'épisode (lieu, studio, objet, nom, année) — les RÈGLES DU TITRE ci-dessous font foi, elles priment sur tout réflexe de titre dramatique
+- Être ÉNONCÉ, pas titré : il n'y a pas de titre d'émission. Tu écris la phrase qui dit DE QUOI on va parler, telle que l'animateur l'annoncerait — les RÈGLES DE L'ÉNONCÉ ci-dessous font foi
 
 ${FRENCH_STYLE_RULES}
 
-${FRENCH_TITLE_RULES}
+${FRENCH_SUBJECT_RULES}
 
 Réponds UNIQUEMENT en JSON valide, sans markdown :
-{"archetype": "la clé de l'archétype choisi", "angle": "le titre de l'émission", "description": "une phrase qui explique l'angle et le fil rouge entre les morceaux"}`,
+{"archetype": "la clé de l'archétype choisi", "angle": "l'énoncé du sujet — la phrase naturelle qui dit de quoi l'émission va parler", "description": "une phrase qui explique le fil rouge entre les morceaux"}`,
     messages: [
       {
         role: "user",
@@ -100,7 +100,7 @@ ${facts}${avoidNote}${recipesNote}`,
   const archetype =
     parsed.archetype && ARCHETYPES[parsed.archetype] ? parsed.archetype : "fil";
 
-  const angle = await refineTitle(parsed.angle || "", artist);
+  const angle = await refineSubject(parsed.angle || "", artist);
 
   return {
     angle,
@@ -109,28 +109,28 @@ ${facts}${avoidNote}${recipesNote}`,
   };
 }
 
-// Garde-fou de langue ciblé sur le titre — le texte le plus visible de
-// l'émission. Une passe Haiku (quasi gratuite) qui réécrit le titre UNIQUEMENT
-// s'il sonne traduit de l'anglais ou s'appuie sur une métaphore creuse.
-// Renvoie le titre tel quel s'il est déjà bon, ou en cas d'échec.
-async function refineTitle(title: string, artist: string): Promise<string> {
-  if (!title.trim()) return title;
+// Garde-fou de langue ciblé sur l'énoncé du sujet — le texte le plus visible
+// de l'émission. Une passe Haiku (quasi gratuite) qui le réécrit UNIQUEMENT
+// s'il sonne titre tout fait, traduit de l'anglais ou creux.
+// Renvoie l'énoncé tel quel s'il est déjà bon, ou en cas d'échec.
+async function refineSubject(subject: string, artist: string): Promise<string> {
+  if (!subject.trim()) return subject;
   try {
     const response = await getClient().messages.create({
       model: "claude-haiku-4-5",
-      max_tokens: 80,
-      system: `Tu es un éditeur de radio musicale française (FIP, Nova) dont le français est la langue maternelle. On te donne un titre d'émission. Ton seul rôle : garantir qu'il sonne comme un vrai titre français, pas comme une traduction de l'anglais.
+      max_tokens: 100,
+      system: `Tu es un éditeur de radio musicale française (FIP, Nova) dont le français est la langue maternelle. On te donne l'énoncé du sujet d'une émission — la phrase qui dit de quoi on va parler. Ton seul rôle : garantir qu'elle sonne naturelle à voix haute, jamais comme un titre tout fait ni une traduction de l'anglais.
 
-${FRENCH_TITLE_RULES}
+${FRENCH_SUBJECT_RULES}
 
-Si le titre est déjà bon, renvoie-le À L'IDENTIQUE.
-S'il sonne traduit, vague ou creux, réécris-le en mieux (court, concret, idiomatique).
+Si l'énoncé est déjà bon, renvoie-le À L'IDENTIQUE.
+S'il sonne titre packagé, traduit, vague ou creux, réécris-le en mieux (naturel, concret, dicible).
 Ne traduis JAMAIS le titre d'un morceau ou d'un groupe : il reste en anglais.
-Réponds UNIQUEMENT par le titre final, sans guillemets, sans explication.`,
+Réponds UNIQUEMENT par l'énoncé final, sans guillemets, sans explication.`,
       messages: [
         {
           role: "user",
-          content: `Artiste de départ : ${artist}\nTitre d'émission proposé : ${title}`,
+          content: `Artiste de départ : ${artist}\nÉnoncé proposé : ${subject}`,
         },
       ],
     });
@@ -138,8 +138,8 @@ Réponds UNIQUEMENT par le titre final, sans guillemets, sans explication.`,
       response.content[0].type === "text"
         ? response.content[0].text.trim().replace(/^["«»\s]+|["«»\s]+$/g, "")
         : "";
-    return refined || title;
+    return refined || subject;
   } catch {
-    return title;
+    return subject;
   }
 }

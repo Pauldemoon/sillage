@@ -415,7 +415,7 @@ export default function PlayerScreen() {
           <VoiceOrb size={246} active={phase === "narration"} />
         </View>
 
-        <Text style={styles.emissionTitle} numberOfLines={2}>
+        <Text style={styles.emissionTitle} numberOfLines={3}>
           {emission?.angle || "Le voyage se prépare"}
         </Text>
         <Text style={styles.emissionSub}>
@@ -611,9 +611,12 @@ const styles = StyleSheet.create({
     marginTop: 28,
     marginBottom: 26,
   },
+  // L'énoncé du sujet — une phrase dicible, pas un titre. Serif plus petit,
+  // jusqu'à trois lignes.
   emissionTitle: {
     fontFamily: serif,
-    fontSize: 30,
+    fontSize: 21,
+    lineHeight: 30,
     color: palette.ink,
     textAlign: "center",
     paddingHorizontal: 8,

@@ -50,17 +50,19 @@ Tu écris dans un français d'éditeur dont c'est la langue maternelle. Jamais u
 
 TEST FINAL : si une phrase sonne traduite, vague ou écrite par une machine, réécris-la jusqu'à ce qu'un francophone natif la dise spontanément.`;
 
-// Règles spécifiques au TITRE d'émission : c'est le texte le plus visible.
-export const FRENCH_TITLE_RULES = `RÈGLES DU TITRE — le NOM de l'émission, pas le titre d'un documentaire :
-- FORME NOMINALE, 2 à 5 mots. Pas de verbe conjugué, pas de phrase qui raconte.
-- INTERDIT : les ouvertures narratives « Quand… », « Le jour où… », « Comment… », « L'histoire de… » ; le deux-points documentaire « Titre : sous-titre » ; les métaphores grandioses ou guerrières (déclarer la guerre, conquérir, révolution, naissance d'une légende) ; tout ce qui sonne bande-annonce Netflix.
-- Le titre s'ancre sur un élément CONCRET de l'épisode — un lieu, un studio, un code postal, un objet, un nom, une année — éventuellement assemblé à UN mot d'angle. Le concret intrigue plus que le lyrisme.
-- Test : c'est le nom d'une émission qu'on a envie d'ouvrir, dicible naturellement à voix haute (« ce soir : Sarcelles 95200 »). Si ça pourrait titrer un reportage TV, c'est raté.
+// Règles de l'ÉNONCÉ DU SUJET : il n'y a PAS de titre d'émission. On dit de
+// quoi on va parler, comme un animateur l'annoncerait à l'antenne — c'est le
+// texte affiché dans l'app et le cap donné aux narrations.
+export const FRENCH_SUBJECT_RULES = `RÈGLES DE L'ÉNONCÉ DU SUJET — il n'y a PAS de titre d'émission, on annonce de quoi on va parler :
+- Une phrase (ou un fragment) NATURELLE, dicible telle quelle à voix haute par l'animateur. Pas un nom d'épisode, pas un slogan, pas un packaging.
+- Elle nomme des choses CONCRÈTES de l'épisode : un lieu, un studio, un disque, des gens, une année. C'est le concret qui donne envie, pas la formule.
+- INTERDIT : tout ce qui sonne titre tout fait (forme figée, majuscules de titre, deux-points marketing « X : Y ») ; les ouvertures dramatiques « Quand… », « Le jour où… » ; les métaphores grandioses ou guerrières (déclarer la guerre, révolution, légende) ; le ton bande-annonce.
+- Test : est-ce que Charlie pourrait dire cette phrase telle quelle au micro pour annoncer le sujet (« aujourd'hui, … ») ? Si ça sonne comme une jaquette de DVD, c'est raté.
 
 EXEMPLES :
-- BON : "Sarcelles 95200" — le lieu et l'objet, rien d'autre
-- BON : "Berlin, côté studio" — un lieu, un angle, trois mots
-- BON : "Le studio du Mur" — un objet concret qui intrigue
-- MAUVAIS : "Le jour où Sarcelles a déclaré la guerre" (phrase narrative + métaphore guerrière)
-- MAUVAIS : "Quand le mur s'invite dans le son" (« Quand… » + personnification creuse)
-- MAUVAIS : "Be My Baby : Le battement qui traverse le siècle" (deux-points documentaire, sous-titre creux)`;
+- BON : "Sarcelles, le 95200, et le premier album de rap qui vient des cités"
+- BON : "Un studio collé au Mur de Berlin, et ce qu'il a fait au son de Bowie"
+- BON : "La bande de Versailles — deux lycées, trois groupes, un son"
+- MAUVAIS : "Sarcelles 95200" (titre tout fait, packaging)
+- MAUVAIS : "Le jour où Sarcelles a déclaré la guerre" (titre dramatique)
+- MAUVAIS : "Be My Baby : Le battement qui traverse le siècle" (jaquette de DVD)`;
