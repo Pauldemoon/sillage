@@ -125,3 +125,23 @@ export async function setDiscoveryTolerance(
 export async function resetMemory(): Promise<void> {
   await saveMemory({ ...EMPTY });
 }
+
+// --- Prénom de l'auditeur (ouverture d'antenne personnalisée) --------------
+const NAME_KEY = "sillage:userName:v1";
+
+export async function getUserName(): Promise<string | null> {
+  try {
+    return (await AsyncStorage.getItem(NAME_KEY)) || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function setUserName(name: string): Promise<void> {
+  try {
+    const clean = name.trim().slice(0, 30);
+    if (clean) await AsyncStorage.setItem(NAME_KEY, clean);
+  } catch {
+    // Le prénom est un confort : jamais bloquant.
+  }
+}

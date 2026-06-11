@@ -7,6 +7,7 @@ import express from "express";
 import generate from "./api/generate";
 import seed from "./api/seed";
 import search from "./api/search";
+import intro from "./api/intro";
 import debug from "./api/debug";
 import spotifySwap from "./api/spotify/swap";
 import spotifyRefresh from "./api/spotify/refresh";
@@ -44,6 +45,7 @@ const route =
 app.all("/api/generate", route(generate));
 app.all("/api/seed", route(seed));
 app.all("/api/search", route(search));
+app.all("/api/intro", route(intro));
 app.all("/api/debug", route(debug));
 app.all("/api/spotify/swap", route(spotifySwap));
 app.all("/api/spotify/refresh", route(spotifyRefresh));

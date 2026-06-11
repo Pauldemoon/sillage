@@ -170,3 +170,30 @@ export async function searchTracks(query: string): Promise<TrackSuggestion[]> {
   });
   return res.data.tracks || [];
 }
+
+// --- Ouverture d'antenne personnalisée -------------------------------------
+export interface Intro {
+  text: string;
+  audioUrl: string;
+}
+
+// « Salut Paul. Aujourd'hui, on part en voyage à partir de Neil Young. »
+// Demandée dès le clic ; le TTS est en cache serveur → quasi instantané
+// après la première écoute d'un couple prénom+artiste.
+export async function fetchIntro(
+  name: string | null,
+  title: string,
+  artist: string,
+): Promise<Intro | null> {
+  try {
+    const res = await axios.post(
+      `${BACKEND}/api/intro`,
+      { name: name || undefined, title, artist },
+      { timeout: 12000 },
+    );
+    return res.data?.audioUrl ? (res.data as Intro) : null;
+  } catch {
+    // L'accueil est un confort : s'il échoue, l'émission démarre sans lui.
+    return null;
+  }
+}

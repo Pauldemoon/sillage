@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { searchTracks, TrackSuggestion } from "../services/api";
+import { getUserName, setUserName } from "../services/memory";
 import { palette, serif, glassShadow, glassShadowSmall } from "../ui/theme";
 import { SilkBackground } from "../ui/silk";
 import { SearchIcon } from "../ui/icons";
@@ -21,8 +22,20 @@ export default function SearchScreen() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<TrackSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
+  const [askName, setAskName] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reqId = useRef(0);
+
+  // Prénom : demandé une seule fois — il personnalise l'ouverture d'antenne.
+  useEffect(() => {
+    getUserName().then((name) => setAskName(!name));
+  }, []);
+
+  function saveName(raw: string) {
+    const clean = raw.trim();
+    if (clean) setUserName(clean).catch(() => {});
+    setAskName(false);
+  }
 
   useEffect(() => {
     if (debounce.current) clearTimeout(debounce.current);
@@ -72,6 +85,21 @@ export default function SearchScreen() {
             Sillage
           </Text>
         </View>
+
+        {askName && (
+          <View style={[styles.nameBox, glassShadowSmall]}>
+            <Text style={styles.nameLabel}>Moi c'est Charlie. Et toi ?</Text>
+            <TextInput
+              style={styles.nameInput}
+              placeholder="Ton prénom"
+              placeholderTextColor={palette.faint}
+              autoCapitalize="words"
+              autoCorrect={false}
+              returnKeyType="done"
+              onSubmitEditing={(e) => saveName(e.nativeEvent.text)}
+            />
+          </View>
+        )}
 
         <View style={[styles.searchBox, glassShadow]}>
           <SearchIcon size={18} color={palette.sub} />
@@ -149,6 +177,29 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(255, 255, 255, 0.9)",
     textShadowOffset: { width: 0, height: 1.5 },
     textShadowRadius: 1,
+  },
+  nameBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    backgroundColor: "rgba(255, 255, 255, 0.38)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.55)",
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    height: 52,
+    marginBottom: 12,
+  },
+  nameLabel: {
+    fontSize: 14,
+    color: palette.sub,
+  },
+  nameInput: {
+    flex: 1,
+    fontSize: 15,
+    color: palette.ink,
+    textAlign: "right",
   },
   searchBox: {
     flexDirection: "row",

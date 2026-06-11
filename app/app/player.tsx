@@ -9,11 +9,17 @@ import {
   Linking,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
-import { Emission, EmissionTrack, generateEmission } from "../services/api";
+import {
+  Emission,
+  EmissionTrack,
+  generateEmission,
+  fetchIntro,
+} from "../services/api";
 import {
   loadMemory,
   mergeMemoryPatch,
   rememberJourney,
+  getUserName,
 } from "../services/memory";
 import {
   setupAudio,
@@ -151,10 +157,34 @@ export default function PlayerScreen() {
       // temps de connexion avant le premier morceau.
       playSfx("sonal");
 
+      // Ouverture d'antenne personnalisée (« Salut Paul. Aujourd'hui, on part
+      // en voyage à partir de… ») : la voix se prépare PENDANT la connexion
+      // Spotify — du temps déjà perdu, donc zéro attente ajoutée.
+      const introTitle = title || seedTrack?.title || "";
+      const introArtist = artist || seedTrack?.artist || "";
+      const introPromise =
+        introTitle && introArtist
+          ? getUserName()
+              .then((name) => fetchIntro(name, introTitle, introArtist))
+              .catch(() => null)
+          : Promise.resolve(null);
+      const playIntro = async () => {
+        const intro = await Promise.race([
+          introPromise,
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+        ]);
+        if (intro?.audioUrl && !stopped.current) {
+          setPhase("narration");
+          await playNarration(intro.audioUrl);
+        }
+      };
+
       if (initialEmission) {
         mergeMemoryPatch(initialEmission.memoryPatch).catch(() => {});
         rememberJourney(initialEmission.journeyId).catch(() => {});
         await connectSpotify();
+        await playIntro();
+        if (stopped.current) return;
         await playPreparedEmission(initialEmission, false);
         return;
       }
@@ -197,6 +227,8 @@ export default function PlayerScreen() {
       );
 
       await connectSpotify();
+      await playIntro();
+      if (stopped.current) return;
       setPhase("music");
       await playTrack(seedTrack.spotifyUri);
       await waitForTrackEnd(
